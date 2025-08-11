@@ -1,102 +1,117 @@
 // lib/features/lesson/data/models/lesson_step_model.dart
-import 'package:musilingo/features/lesson/data/models/drag_drop_question_model.dart';
-import 'package:musilingo/features/lesson/data/models/ear_training_question_model.dart';
-import 'package:musilingo/features/lesson/data/models/question_model.dart';
 
-enum LessonStepType { theory, question, earTraining, dragAndDrop }
+enum LessonStepType {
+  explanation,
+  earTraining,
+  dragAndDrop,
+}
 
 abstract class LessonStep {
+  final int id;
+  final int lessonId;
+  final int stepIndex;
   final LessonStepType type;
-  LessonStep(this.type);
 
-  // Factory constructor para criar o tipo de passo correto a partir dos dados do Supabase.
+  LessonStep({
+    required this.id,
+    required this.lessonId,
+    required this.stepIndex,
+    required this.type,
+  });
+
   factory LessonStep.fromMap(Map<String, dynamic> map) {
-    final typeString = map['type'];
-    final content = map['content'] as Map<String, dynamic>;
+    final typeString = map['type'] as String;
+    final type = LessonStepType.values.firstWhere(
+      (e) => e.toString() == 'LessonStepType.$typeString',
+      orElse: () => throw 'Tipo de passo desconhecido: $typeString',
+    );
 
-    switch (typeString) {
-      case 'theory':
-        return TheoryStep.fromContent(content);
-      case 'question':
-        return QuestionStep.fromContent(content);
-      case 'earTraining':
-        return EarTrainingStep.fromContent(content);
-      case 'dragAndDrop':
-        return DragAndDropStep.fromContent(content);
-      default:
-        throw Exception('Tipo de passo desconhecido: $typeString');
+    switch (type) {
+      case LessonStepType.explanation:
+        return ExplanationStep.fromMap(map);
+      case LessonStepType.earTraining:
+        return EarTrainingStep.fromMap(map);
+      case LessonStepType.dragAndDrop:
+        return DragAndDropStep.fromMap(map);
+      // A cláusula 'default' foi removida pois o switch já cobre todos os casos.
     }
   }
 }
 
-class TheoryStep extends LessonStep {
-  final String title;
-  final String content;
-  final String? imageAsset;
+class ExplanationStep extends LessonStep {
+  final String text;
+  final String? imageUrl;
 
-  TheoryStep({
-    required this.title,
-    required this.content,
-    this.imageAsset,
-  }) : super(LessonStepType.theory);
+  ExplanationStep({
+    required super.id,
+    required super.lessonId,
+    required super.stepIndex,
+    required this.text,
+    this.imageUrl,
+  }) : super(type: LessonStepType.explanation);
 
-  // Construtor para criar a partir do JSON 'content' do Supabase.
-  factory TheoryStep.fromContent(Map<String, dynamic> content) {
-    return TheoryStep(
-      title: content['title'],
-      content: content['text'], // Note a mudança de 'content' para 'text'
-      imageAsset: content['imageAsset'],
-    );
-  }
-}
-
-class QuestionStep extends LessonStep {
-  final Question question;
-  QuestionStep(this.question) : super(LessonStepType.question);
-
-  // Construtor para criar a partir do JSON 'content' do Supabase.
-  factory QuestionStep.fromContent(Map<String, dynamic> content) {
-    return QuestionStep(
-      Question(
-        statement: content['statement'],
-        imageAsset: content['imageAsset'],
-        options: List<String>.from(content['options']),
-        correctAnswer: content['correctAnswer'],
-      ),
+  factory ExplanationStep.fromMap(Map<String, dynamic> map) {
+    return ExplanationStep(
+      id: map['id'],
+      lessonId: map['lesson_id'],
+      stepIndex: map['step_index'],
+      text: map['text'],
+      imageUrl: map['image_url'],
     );
   }
 }
 
 class EarTrainingStep extends LessonStep {
-  final EarTrainingQuestion question;
-  EarTrainingStep(this.question) : super(LessonStepType.earTraining);
+  final String questionText;
+  final String audioUrl;
+  final List<String> options;
+  final String correctAnswer;
 
-  // Construtor para criar a partir do JSON 'content' do Supabase.
-  factory EarTrainingStep.fromContent(Map<String, dynamic> content) {
+  EarTrainingStep({
+    required super.id,
+    required super.lessonId,
+    required super.stepIndex,
+    required this.questionText,
+    required this.audioUrl,
+    required this.options,
+    required this.correctAnswer,
+  }) : super(type: LessonStepType.earTraining);
+
+  factory EarTrainingStep.fromMap(Map<String, dynamic> map) {
     return EarTrainingStep(
-      EarTrainingQuestion(
-        statement: content['statement'],
-        audioAssetPath: content['audioAssetPath'],
-        options: List<String>.from(content['options']),
-        correctAnswer: content['correctAnswer'],
-      ),
+      id: map['id'],
+      lessonId: map['lesson_id'],
+      stepIndex: map['step_index'],
+      questionText: map['question_text'],
+      audioUrl: map['audio_url'],
+      options: List<String>.from(map['options']),
+      correctAnswer: map['correct_answer'],
     );
   }
 }
 
 class DragAndDropStep extends LessonStep {
-  final DragAndDropQuestion question;
-  DragAndDropStep(this.question) : super(LessonStepType.dragAndDrop);
+  final String questionText;
+  final List<String> draggableItems;
+  final List<String> correctOrder;
 
-  // Construtor para criar a partir do JSON 'content' do Supabase.
-  factory DragAndDropStep.fromContent(Map<String, dynamic> content) {
+  DragAndDropStep({
+    required super.id,
+    required super.lessonId,
+    required super.stepIndex,
+    required this.questionText,
+    required this.draggableItems,
+    required this.correctOrder,
+  }) : super(type: LessonStepType.dragAndDrop);
+
+  factory DragAndDropStep.fromMap(Map<String, dynamic> map) {
     return DragAndDropStep(
-      DragAndDropQuestion(
-        statement: content['statement'],
-        // Precisamos converter a lista de opções em DraggableNote
-        options: (content['options'] as List<dynamic>).map((noteName) => DraggableNote(name: noteName.toString())).toList(),
-        correctAnswers: List<String>.from(content['correctAnswers']),
-      ),
+      id: map['id'],
+      lessonId: map['lesson_id'],
+      stepIndex: map['step_index'],
+      questionText: map['question_text'],
+      draggableItems: List<String>.from(map['draggable_items']),
+      correctOrder: List<String>.from(map['correct_order']),
     );
   }
 }

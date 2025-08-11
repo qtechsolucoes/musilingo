@@ -25,18 +25,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final DatabaseService _databaseService = DatabaseService();
   late Future<Map<String, dynamic>> _homeDataFuture;
-  PageController _pageController = PageController();
+
+  int lastCompletedIndex = -1;
 
   @override
   void initState() {
     super.initState();
     _homeDataFuture = _fetchHomeData();
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
   }
 
   Future<Map<String, dynamic>> _fetchHomeData() async {
@@ -61,28 +56,15 @@ class _HomeScreenState extends State<HomeScreen> {
           lessons: allLessons.sublist(i, end),
         ));
       }
-
-      int initialWorldIndex = 0;
-      if (worlds.isNotEmpty) {
-        int lastCompletedLessonIndex = allLessons
-            .lastIndexWhere((lesson) => completedLessonIds.contains(lesson.id));
-        if (lastCompletedLessonIndex != -1) {
-          initialWorldIndex = lastCompletedLessonIndex ~/ lessonsPerWorld;
-        }
-      }
-
-      _pageController = PageController(initialPage: initialWorldIndex);
-
       return {
         'worlds': worlds,
         'completedLessonIds': completedLessonIds,
+        'allLessons': allLessons,
       };
-    } catch (error) {
-      if (!mounted) return {};
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao buscar dados: $error')),
-      );
-      return {};
+    } catch (error, stackTrace) {
+      debugPrint("Erro detalhado ao buscar dados: $error");
+      debugPrint("Stack Trace: $stackTrace");
+      rethrow;
     }
   }
 
@@ -96,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.background,
         elevation: 0,
         title: const Text('Trilha de Aprendizagem',
             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -130,88 +112,120 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          const Positioned.fill(
-            child: CustomPaint(
-              painter: MusicBackgroundPainter(),
-            ),
-          ),
-          SafeArea(
-            child: FutureBuilder<Map<String, dynamic>>(
-              future: _homeDataFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                      child:
-                          CircularProgressIndicator(color: AppColors.accent));
-                }
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _homeDataFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Container(
+                color: AppColors.background,
+                child: const Center(
+                    child: CircularProgressIndicator(color: AppColors.accent)));
+          }
 
-                if (snapshot.hasError ||
-                    !snapshot.hasData ||
-                    snapshot.data!.isEmpty) {
-                  return const Center(
-                      child: Text('Não foi possível carregar o conteúdo.'));
-                }
+          if (snapshot.hasError) {
+            return Container(
+                color: AppColors.background,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Não foi possível carregar o conteúdo.\n\nErro: ${snapshot.error}',
+                      style: const TextStyle(color: Colors.white),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ));
+          }
 
-                final worlds = snapshot.data!['worlds'] as List<World>;
-                final completedLessonIds =
-                    snapshot.data!['completedLessonIds'] as Set<int>;
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Container(
+                color: AppColors.background,
+                child:
+                    const Center(child: Text('Nenhum conteúdo encontrado.')));
+          }
 
-                return PageView.builder(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: worlds.length,
-                  itemBuilder: (context, index) {
-                    final world = worlds[index];
-                    bool isWorldComplete = world.lessons.every(
-                        (lesson) => completedLessonIds.contains(lesson.id));
-                    return _buildWorldWidget(world, completedLessonIds,
-                        isWorldComplete, (index == worlds.length - 1));
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+          final data = snapshot.data!;
+          final worlds = data['worlds'] as List<World>;
+          final completedLessonIds = data['completedLessonIds'] as Set<int>;
+          final allLessons = data['allLessons'] as List<Lesson>;
+
+          int initialWorldIndex = 0;
+          if (worlds.isNotEmpty) {
+            int lastCompletedLessonIndex = allLessons.lastIndexWhere(
+                (lesson) => completedLessonIds.contains(lesson.id));
+            if (lastCompletedLessonIndex != -1) {
+              const int lessonsPerWorld = 10;
+              initialWorldIndex = lastCompletedLessonIndex ~/ lessonsPerWorld;
+            }
+          }
+
+          final pageController = PageController(initialPage: initialWorldIndex);
+
+          return PageView.builder(
+            controller: pageController,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: worlds.length,
+            itemBuilder: (context, index) {
+              final world = worlds[index];
+              bool isWorldComplete = world.lessons
+                  .every((lesson) => completedLessonIds.contains(lesson.id));
+              return _buildWorldWidget(
+                  world,
+                  completedLessonIds,
+                  isWorldComplete,
+                  (index == worlds.length - 1),
+                  pageController);
+            },
+          );
+        },
       ),
     );
   }
 
   Widget _buildWorldWidget(World world, Set<int> completedLessonIds,
-      bool isWorldComplete, bool isLastWorld) {
-    const verticalSpacing = 150.0;
+      bool isWorldComplete, bool isLastWorld, PageController pageController) {
+    const verticalSpacing = 160.0;
     final totalHeight = (world.lessons.length * verticalSpacing) +
         (isWorldComplete && !isLastWorld ? verticalSpacing : 0);
 
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-        child: SizedBox(
-          width: double.infinity,
-          height: totalHeight,
-          child: Stack(
-            children: [
-              _buildPathPainter(world.lessons, isWorldComplete && !isLastWorld),
-              ..._buildLessonNodes(world.lessons, completedLessonIds),
-              if (isWorldComplete && !isLastWorld)
-                Positioned(
-                  top: _getLessonNodePosition(world.lessons.length).dy,
-                  left: _getLessonNodePosition(world.lessons.length).dx,
-                  child: _buildNextModuleNode(),
-                ),
-            ],
+    return Stack(
+      children: [
+        const Positioned.fill(
+          child: CustomPaint(
+            painter: MusicBackgroundPainter(),
           ),
         ),
-      ),
+        SingleChildScrollView(
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+            child: SizedBox(
+              width: double.infinity,
+              height: totalHeight,
+              child: Stack(
+                children: [
+                  _buildPathPainter(
+                      world.lessons, isWorldComplete && !isLastWorld),
+                  ..._buildLessonNodes(world.lessons, completedLessonIds),
+                  if (isWorldComplete && !isLastWorld)
+                    Positioned(
+                      top: _getLessonNodePosition(world.lessons.length).dy,
+                      left: _getLessonNodePosition(world.lessons.length).dx,
+                      child: _buildNextModuleNode(pageController),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildNextModuleNode() {
+  Widget _buildNextModuleNode(PageController pageController) {
     return GestureDetector(
       onTap: () {
-        _pageController.nextPage(
+        pageController.nextPage(
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeInOut,
         );
@@ -241,7 +255,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Widget> _buildLessonNodes(
       List<Lesson> lessons, Set<int> completedLessonIds) {
     List<Widget> nodes = [];
-    int lastCompletedIndex = -1;
     for (int i = lessons.length - 1; i >= 0; i--) {
       if (completedLessonIds.contains(lessons[i].id)) {
         lastCompletedIndex = i;
@@ -296,30 +309,31 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Offset _getLessonNodePosition(int index) {
-    if (!mounted) return Offset.zero;
-
     final screenWidth = MediaQuery.of(context).size.width - 32;
     const double nodeWidth = 100.0;
-    final double y = 10.0 + (index * 150.0);
+    final double y = 10.0 + (index * 160.0);
 
     double x;
-    switch (index % 3) {
-      case 0: // Esquerda
-        x = screenWidth * 0.1;
+    switch (index % 4) {
+      case 0:
+        x = (screenWidth / 2) - (nodeWidth / 2);
         break;
-      case 1: // Direita
+      case 1:
         x = screenWidth * 0.9 - nodeWidth;
         break;
-      case 2: // Centro
-      default:
+      case 2:
         x = (screenWidth / 2) - (nodeWidth / 2);
+        break;
+      case 3:
+      default:
+        x = screenWidth * 0.1;
         break;
     }
     return Offset(x, y);
   }
 }
 
-// --- PINTOR COM LINHAS GROSSAS E CANTOS SUAVES ---
+// --- PINTOR COM A SUA LÓGICA DE LINHAS INTEGRADA ---
 class PathPainter extends CustomPainter {
   final List<Offset> nodePositions;
 
@@ -328,35 +342,65 @@ class PathPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF4A4A6A)
+      ..color = const Color(0xFF5a5a8a) // cor da linha
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 8.0 // <<< LINHA MAIS GROSSA
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round; // <<< CANTO ARREDONDADO
+      ..strokeWidth = 12.0 // espessura
+      ..strokeCap = StrokeCap.round;
 
     if (nodePositions.length < 2) return;
 
-    const double nodeSize = 100.0;
+    // --- Calcula tamanho médio do bloco ---
+    // Pressupõe que os nodes são quadrados e o espaçamento é consistente
+    double nodeSize = 100.0; // Usando um valor fixo para robustez
+
+    // Raio da curva proporcional ao tamanho do bloco
+    final double cornerRadius = nodeSize * 0.2; // Ajustado para 40%
+
     final path = Path();
 
     for (int i = 0; i < nodePositions.length - 1; i++) {
-      final start = Offset(nodePositions[i].dx + nodeSize / 2,
-          nodePositions[i].dy + nodeSize / 2);
-      final end = Offset(nodePositions[i + 1].dx + nodeSize / 2,
-          nodePositions[i + 1].dy + nodeSize / 2);
+      final start = Offset(
+        nodePositions[i].dx + nodeSize / 2,
+        nodePositions[i].dy + nodeSize / 2,
+      );
 
-      final midY = (start.dy + end.dy) / 2;
+      final end = Offset(
+        nodePositions[i + 1].dx + nodeSize / 2,
+        nodePositions[i + 1].dy + nodeSize / 2,
+      );
 
-      path.moveTo(start.dx, start.dy);
-      path.lineTo(start.dx, midY);
-      path.lineTo(end.dx, midY);
+      if (i == 0) path.moveTo(start.dx, start.dy);
+
+      final dx = end.dx - start.dx;
+      final dy = end.dy - start.dy;
+
+      // Movimento em L com canto arredondado (lógica vertical primeiro)
+      // Esta nova lógica é mais robusta e cria o caminho vertical primeiro, como nas imagens
+
+      // Ponto de "quina" da linha em L
+      final cornerPoint = Offset(start.dx, end.dy);
+
+      // 1. Desenha a linha vertical, parando antes da curva
+      path.lineTo(cornerPoint.dx,
+          cornerPoint.dy - cornerRadius * (end.dy - start.dy).sign);
+
+      // 2. Desenha o arco (a curva suave)
+      path.arcToPoint(
+        Offset(cornerPoint.dx + cornerRadius * (end.dx - start.dx).sign,
+            cornerPoint.dy),
+        radius: Radius.circular(cornerRadius),
+        clockwise: dx.sign != dy.sign, // Lógica para a direção da curva
+      );
+
+      // 3. Completa com a linha horizontal
       path.lineTo(end.dx, end.dy);
     }
+
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 class MusicBackgroundPainter extends CustomPainter {
@@ -364,59 +408,30 @@ class MusicBackgroundPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final backgroundPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          AppColors.background,
-          Color(0xFF1c1c3c),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawRect(
-        Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
-
-    final notesPaint = Paint()
-      ..color = AppColors.primary.withAlpha(20)
-      ..style = PaintingStyle.fill;
-
-    _drawQuarterNote(canvas, notesPaint,
-        Offset(size.width * 0.85, size.height * 0.2), 3.0, 0.2);
-    _drawEighthNote(canvas, notesPaint,
-        Offset(size.width * 0.15, size.height * 0.75), 3.5, -0.3);
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = AppColors.background,
+    );
+    _drawAurora(
+        canvas, size, AppColors.primary.withAlpha(30), Alignment.topLeft);
+    _drawAurora(
+        canvas, size, AppColors.completed.withAlpha(25), Alignment.bottomRight);
   }
 
-  void _drawQuarterNote(
-      Canvas canvas, Paint paint, Offset center, double scale, double angle) {
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(angle);
-    canvas.scale(scale);
+  void _drawAurora(Canvas canvas, Size size, Color color, Alignment alignment) {
+    final Rect rect = alignment.inscribe(
+      Size(size.width * 1.5, size.height * 1.5),
+      Rect.fromLTWH(0, 0, size.width, size.height),
+    );
 
-    final path = Path()
-      ..addOval(Rect.fromCircle(center: Offset(0, 0), radius: 15))
-      ..addRect(Rect.fromLTWH(13, -70, 6, 70));
+    final paint = Paint()
+      ..shader = RadialGradient(
+        center: alignment,
+        radius: 0.8,
+        colors: [color, Colors.transparent],
+      ).createShader(rect);
 
-    canvas.drawPath(path, paint);
-    canvas.restore();
-  }
-
-  void _drawEighthNote(
-      Canvas canvas, Paint paint, Offset center, double scale, double angle) {
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(angle);
-    canvas.scale(scale);
-
-    final path = Path()
-      ..addOval(Rect.fromCircle(center: Offset(0, 0), radius: 15))
-      ..addRect(Rect.fromLTWH(13, -70, 6, 70));
-
-    path.moveTo(19, -70);
-    path.quadraticBezierTo(45, -60, 25, -20);
-
-    canvas.drawPath(path, paint);
-    canvas.restore();
+    canvas.drawRect(rect, paint);
   }
 
   @override

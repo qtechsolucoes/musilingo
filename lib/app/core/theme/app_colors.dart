@@ -2,12 +2,16 @@
 
 import 'package:flutter/material.dart';
 
-// Classe para armazenar todas as cores padrão da nossa aplicação.
 class AppColors {
-  static const Color background = Color(0xFF1A1A2E); // Azul noite escuro
-  static const Color primary = Color(0xFFE94560);   // Roxo/Rosa vibrante para destaque
-  static const Color accent = Color(0xFFFFD700);    // Dourado para elementos importantes
+  // Cores da nova paleta
+  static const Color background = Color(0xFF0f0f2d);
+  static const Color primary = Color(0xFF4a47a3);
+  static const Color completed = Color(0xFF00a896);
+  static const Color accent = Color(0xFFf0c419);
+
+  // --- CORES ANTIGAS ADICIONADAS DE VOLTA ---
+  // (Para compatibilidade com o resto do app)
   static const Color text = Colors.white;
-  static const Color textSecondary = Colors.white70;
-  static const Color card = Color(0xFF16213E);      // Cor para cards e elementos de superfície
+  static const Color textSecondary = Color(0xFFaeb2b7);
+  static const Color card = Color(0xFF1c1c3c);
 }

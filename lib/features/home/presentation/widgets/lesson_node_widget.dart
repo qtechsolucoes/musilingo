@@ -29,14 +29,15 @@ class LessonNodeWidget extends StatelessWidget {
       case LessonStatus.locked:
         backgroundColor = Colors.grey[800]!;
         iconData = Icons.lock;
-        iconColor = Colors.white.withOpacity(0.7);
+        iconColor = Colors.white.withAlpha(179);
         break;
       case LessonStatus.unlocked:
         backgroundColor = AppColors.primary;
         iconData = Icons.music_note;
         break;
       case LessonStatus.completed:
-        backgroundColor = AppColors.accent;
+        // *** USANDO A NOVA COR DE SUCESSO ***
+        backgroundColor = AppColors.completed;
         iconData = Icons.check;
         break;
     }
@@ -46,17 +47,15 @@ class LessonNodeWidget extends StatelessWidget {
       child: Container(
         width: 100,
         height: 100,
-        // *** DECORAÇÃO COM SOMBRA ADICIONADA AQUI ***
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 10.0, // A intensidade do desfoque
-              spreadRadius: 1.0, // O quanto a sombra se espalha
-              offset: const Offset(
-                  0, 5), // Deslocamento: 0 na horizontal, 5 para baixo
+              color: Colors.black.withAlpha(102),
+              blurRadius: 10.0,
+              spreadRadius: 1.0,
+              offset: const Offset(0, 5),
             ),
           ],
         ),
