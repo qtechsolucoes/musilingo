@@ -2,10 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
+import 'package:musilingo/app/presentation/view/main_navigation_screen.dart';
 import 'package:musilingo/features/auth/presentation/view/signup_screen.dart';
-import 'package:musilingo/features/home/presentation/view/home_screen.dart'; // Importa a HomeScreen
-import 'package:musilingo/main.dart'; // Importa o supabase
-import 'package:musilingo/shared/widgets/custom_text_field.dart';
+import 'package:musilingo/main.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -32,9 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted) {
-        // Navega para a HomeScreen, removendo todas as telas anteriores da pilha.
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
               (route) => false,
         );
       }
@@ -82,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
                 const Text('Bem-vindo de volta!', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Text('Sentimos sua falta.', textAlign: TextAlign.center, style: TextStyle(fontSize: 18, color: AppColors.textSecondary)),
+                const Text('Sentimos sua falta.', textAlign: TextAlign.center, style: TextStyle(fontSize: 18, color: AppColors.textSecondary)),
                 const SizedBox(height: 48),
                 TextField(
                   controller: _emailController,
@@ -90,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: const TextStyle(color: AppColors.text),
                   decoration: InputDecoration(
                     labelText: 'E-mail',
-                    labelStyle: TextStyle(color: AppColors.textSecondary),
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
                     prefixIcon: const Icon(Icons.email_outlined, color: AppColors.accent),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
@@ -103,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: const TextStyle(color: AppColors.text),
                   decoration: InputDecoration(
                     labelText: 'Senha',
-                    labelStyle: TextStyle(color: AppColors.textSecondary),
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
                     prefixIcon: const Icon(Icons.lock_outline, color: AppColors.accent),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
@@ -126,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text('Não tem uma conta?', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+                    const Text('Não tem uma conta?', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).push(MaterialPageRoute(builder: (context) => const SignupScreen()));

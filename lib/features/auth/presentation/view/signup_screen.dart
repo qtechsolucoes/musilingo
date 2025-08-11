@@ -2,10 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
-import 'package:musilingo/main.dart'; // Importa o main para ter acesso ao 'supabase'
-import 'package:musilingo/shared/widgets/custom_text_field.dart';
+import 'package:musilingo/main.dart';
 
-// Convertido para StatefulWidget
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -14,34 +12,26 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  // Controladores para capturar o texto dos campos
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // Variável para controlar o estado de carregamento
   bool _isLoading = false;
 
-  // Função para realizar o cadastro
   Future<void> _signUp() async {
-    // Verifica se o widget ainda está na árvore de widgets
     if (!mounted) return;
 
-    // Inicia o estado de carregamento
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // Chama a função de cadastro do Supabase
       await supabase.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
-        // Podemos adicionar dados extras, como o nome do usuário
         data: {'full_name': _nameController.text.trim()},
       );
 
-      // Se o cadastro for bem-sucedido, mostra uma mensagem
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -49,11 +39,9 @@ class _SignupScreenState extends State<SignupScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        // Volta para a tela de login
         Navigator.of(context).pop();
       }
     } catch (error) {
-      // Se ocorrer um erro, mostra a mensagem de erro
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -63,7 +51,6 @@ class _SignupScreenState extends State<SignupScreen> {
         );
       }
     } finally {
-      // Finaliza o estado de carregamento, independentemente do resultado
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -74,7 +61,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   void dispose() {
-    // Limpa os controladores para liberar memória
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -105,8 +91,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 48),
-
-                // Conectamos os controladores aos campos de texto
                 TextField(
                   controller: _nameController,
                   style: const TextStyle(color: AppColors.text),
@@ -145,17 +129,13 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-
-                // Botão de Cadastrar agora chama a função _signUp
                 ElevatedButton(
-                  // Desabilitamos o botão enquanto estiver carregando
                   onPressed: _isLoading ? null : _signUp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  // Mostra um indicador de progresso ou o texto
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : const Text(

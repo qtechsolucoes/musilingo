@@ -30,6 +30,9 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^4.0.0
+  supabase: ^2.1.2  # Adicione esta linha
+  yaml: ^3.1.2      # Adicione esta linha
+  dotenv: ^4.2.0    # Adicione esta linha
 
 flutter:
   uses-material-design: true

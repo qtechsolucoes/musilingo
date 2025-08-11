@@ -4,14 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
 
+enum LessonStatus { locked, unlocked, completed }
+
 class LessonNodeWidget extends StatelessWidget {
   final Lesson lesson;
   final VoidCallback? onTap;
+  final LessonStatus status;
 
   const LessonNodeWidget({
     super.key,
     required this.lesson,
     this.onTap,
+    required this.status,
   });
 
   @override
@@ -21,7 +25,7 @@ class LessonNodeWidget extends StatelessWidget {
     IconData displayIcon;
     List<BoxShadow>? boxShadow;
 
-    switch (lesson.status) {
+    switch (status) {
       case LessonStatus.completed:
         nodeColor = const Color(0xFF6A4C93); // Roxo
         iconColor = Colors.white;
@@ -30,10 +34,10 @@ class LessonNodeWidget extends StatelessWidget {
       case LessonStatus.unlocked:
         nodeColor = AppColors.accent; // Dourado
         iconColor = AppColors.background;
-        displayIcon = lesson.icon;
+        displayIcon = Icons.music_note;
         boxShadow = [
           BoxShadow(
-            color: AppColors.accent.withOpacity(0.5),
+            color: AppColors.accent.withAlpha(128),
             blurRadius: 12,
             spreadRadius: 2,
           ),
@@ -43,12 +47,12 @@ class LessonNodeWidget extends StatelessWidget {
       default:
         nodeColor = Colors.grey.shade800;
         iconColor = Colors.grey.shade600;
-        displayIcon = Icons.lock;
+        displayIcon = Icons.lock_outline;
         break;
     }
 
     return GestureDetector(
-      onTap: lesson.status != LessonStatus.locked ? onTap : null,
+      onTap: status != LessonStatus.locked ? onTap : null,
       child: Container(
         width: 100,
         height: 100,
@@ -57,8 +61,27 @@ class LessonNodeWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: boxShadow,
         ),
-        child: Center(
-          child: Icon(displayIcon, color: iconColor, size: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // --- CORREÇÃO DO ÍCONE ---
+            Icon(displayIcon, color: iconColor, size: 36), // Tamanho do ícone reduzido
+            const SizedBox(height: 6), // Espaçamento ajustado
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: Text(
+                lesson.title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: iconColor.withAlpha(200),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            )
+          ],
         ),
       ),
     );

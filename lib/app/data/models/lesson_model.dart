@@ -1,19 +1,46 @@
 // lib/app/data/models/lesson_model.dart
 import 'package:flutter/material.dart';
-import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
-
-enum LessonStatus { locked, unlocked, completed }
 
 class Lesson {
+  final int id;
   final String title;
   final IconData icon;
-  final LessonStatus status;
-  final List<LessonStep> steps; // <-- ATUALIZADO AQUI
+  final int order; // CORREÇÃO: A propriedade 'order' foi adicionada de volta.
 
   Lesson({
+    required this.id,
     required this.title,
     required this.icon,
-    required this.status,
-    required this.steps, // <-- ATUALIZADO AQUI
+    required this.order, // CORREÇÃO: Adicionada ao construtor.
   });
+
+  factory Lesson.fromMap(Map<String, dynamic> map) {
+    return Lesson(
+      id: map['id'],
+      title: map['title'],
+      icon: _getIconData(map['icon']),
+      order: map['order'], // CORREÇÃO: O 'order' agora é lido do mapa de dados.
+    );
+  }
+}
+
+IconData _getIconData(String iconName) {
+  switch (iconName) {
+    case 'graphic_eq':
+      return Icons.graphic_eq;
+    case 'music_note':
+      return Icons.music_note;
+    case 'show_chart':
+      return Icons.show_chart;
+    case 'hearing':
+      return Icons.hearing;
+    case 'grid_on':
+      return Icons.grid_on;
+    case 'timer':
+      return Icons.timer;
+    case 'vpn_key': // Adicionado para a nova lição
+      return Icons.vpn_key;
+    default:
+      return Icons.school;
+  }
 }

@@ -11,6 +11,7 @@ import 'package:musilingo/features/lesson/data/models/drag_drop_question_model.d
 import 'package:musilingo/features/lesson/data/models/ear_training_question_model.dart';
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
 import 'package:musilingo/features/lesson/data/models/question_model.dart';
+import 'package:musilingo/main.dart';
 
 class LessonScreen extends StatefulWidget {
   final Lesson lesson;
@@ -21,6 +22,9 @@ class LessonScreen extends StatefulWidget {
 }
 
 class _LessonScreenState extends State<LessonScreen> {
+  late final Future<List<LessonStep>> _stepsFuture;
+  List<LessonStep> _steps = [];
+
   int _currentStepIndex = 0;
   String? _selectedAnswer;
   bool? _isCorrect;
@@ -31,18 +35,49 @@ class _LessonScreenState extends State<LessonScreen> {
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
-    _setupStep();
+    _stepsFuture = _fetchLessonSteps();
   }
 
   @override
-  void didUpdateWidget(covariant LessonScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _setupStep();
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<List<LessonStep>> _fetchLessonSteps() async {
+    try {
+      final response = await supabase
+          .from('lesson_steps')
+          .select()
+          .eq('lesson_id', widget.lesson.id)
+          .order('order', ascending: true);
+
+      final steps = List<LessonStep>.from(
+        response.map((map) => LessonStep.fromMap(map as Map<String, dynamic>)),
+      );
+
+      if (mounted) {
+        setState(() {
+          _steps = steps;
+        });
+        _setupStep();
+      }
+
+      return steps;
+
+    } catch (e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao carregar conteúdo da lição: $e'))
+        );
+      }
+      return [];
+    }
   }
 
   void _setupStep() {
-    if (widget.lesson.steps.isEmpty) return;
-    final currentStep = widget.lesson.steps[_currentStepIndex];
+    if (_steps.isEmpty || _currentStepIndex >= _steps.length) return;
+    final currentStep = _steps[_currentStepIndex];
     if (currentStep.type == LessonStepType.dragAndDrop) {
       _setupDragAndDrop(currentStep as DragAndDropStep);
     }
@@ -58,7 +93,7 @@ class _LessonScreenState extends State<LessonScreen> {
         ),
         DragAndDropList(
           header: const Text('Arraste as notas aqui', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          children: [],
+          children: const [],
           canDrag: false,
         ),
       ];
@@ -66,7 +101,7 @@ class _LessonScreenState extends State<LessonScreen> {
   }
 
   void _nextStep() {
-    if (_currentStepIndex < widget.lesson.steps.length - 1) {
+    if (_currentStepIndex < _steps.length - 1) {
       setState(() {
         _currentStepIndex++;
         _selectedAnswer = null;
@@ -85,6 +120,7 @@ class _LessonScreenState extends State<LessonScreen> {
       _isCorrect = selectedAnswer == correctAnswer;
     });
     Future.delayed(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
       if (_isCorrect!) {
         _nextStep();
       } else {
@@ -96,7 +132,22 @@ class _LessonScreenState extends State<LessonScreen> {
     });
   }
 
-  void _showCompletionDialog() {
+  void _showCompletionDialog() async {
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await supabase.from('user_lesson_progress').upsert({
+        'user_id': userId,
+        'lesson_id': widget.lesson.id,
+      });
+
+    } catch (e) {
+      // O erro é tratado silenciosamente para não interromper o fluxo do usuário.
+    }
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -119,32 +170,6 @@ class _LessonScreenState extends State<LessonScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.lesson.steps.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.close, color: Colors.white),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        body: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.construction, size: 80, color: AppColors.accent),
-              SizedBox(height: 20),
-              Text('Lição em Breve!', style: TextStyle(fontSize: 24)),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final currentStep = widget.lesson.steps[_currentStepIndex];
-    final progress = (_currentStepIndex) / widget.lesson.steps.length;
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.background,
@@ -154,7 +179,7 @@ class _LessonScreenState extends State<LessonScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: LinearProgressIndicator(
-          value: progress,
+          value: _steps.isEmpty ? 0 : (_currentStepIndex + 1) / _steps.length,
           backgroundColor: Colors.grey.shade700,
           color: AppColors.accent,
           minHeight: 10,
@@ -175,7 +200,19 @@ class _LessonScreenState extends State<LessonScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: _buildStepContent(currentStep),
+        child: FutureBuilder<List<LessonStep>>(
+          future: _stepsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting || _steps.isEmpty) {
+              return const Center(child: CircularProgressIndicator(color: AppColors.accent));
+            }
+            if (snapshot.hasError) {
+              return const Center(child: Text('Erro ao carregar a lição.'));
+            }
+            final currentStep = _steps[_currentStepIndex];
+            return _buildStepContent(currentStep);
+          },
+        ),
       ),
     );
   }
@@ -190,32 +227,36 @@ class _LessonScreenState extends State<LessonScreen> {
         return _buildEarTrainingStep(step as EarTrainingStep);
       case LessonStepType.dragAndDrop:
         return _buildDragAndDropStep(step as DragAndDropStep);
+      default:
+        return const Center(child: Text("Este tipo de exercício ainda não foi implementado."));
     }
   }
 
   Widget _buildTheoryStep(TheoryStep step) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           child: SingleChildScrollView(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(step.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                Text(step.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 24),
                 Text(step.content, style: TextStyle(fontSize: 18, color: AppColors.textSecondary, height: 1.5)),
               ],
             ),
           ),
         ),
+        const SizedBox(height: 16),
         ElevatedButton(
           onPressed: _nextStep,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.accent,
             padding: const EdgeInsets.symmetric(vertical: 16),
+            minimumSize: const Size(double.infinity, 50),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          child: const Text('CONTINUAR', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+          child: const Text('CONTINUAR', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.background)),
         ),
       ],
     );
@@ -226,140 +267,44 @@ class _LessonScreenState extends State<LessonScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(question.statement, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 24),
-        if (question.imageAsset != null)
-          SvgPicture.asset(question.imageAsset!, height: 150)
-        else
-          const SizedBox(height: 150),
-        const SizedBox(height: 24),
-        ...question.options.map((option) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ElevatedButton(
-              onPressed: () => _answerQuestion(option, question.correctAnswer),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _getButtonColor(option, question.correctAnswer),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: Colors.white24),
-                ),
-              ),
-              child: Text(option, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+        Text(question.statement, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        if (question.imageAsset != null) SvgPicture.asset(question.imageAsset!, height: 100),
+        const SizedBox(height: 16),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              children: question.options.map((option) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6.0),
+                  child: ElevatedButton(
+                    onPressed: () => _answerQuestion(option, question.correctAnswer),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _getButtonColor(option, question.correctAnswer),
+                      minimumSize: const Size(double.infinity, 50),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.white24),
+                      ),
+                    ),
+                    child: Text(option, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+                  ),
+                );
+              }).toList(),
             ),
-          );
-        }).toList(),
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildEarTrainingStep(EarTrainingStep step) {
-    final question = step.question;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(question.statement, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 24),
-        GestureDetector(
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Tocando som... (Simulação)')),
-            );
-          },
-          child: Container(
-            height: 150,
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.accent, width: 3),
-            ),
-            child: const Center(
-              child: Icon(Icons.volume_up, size: 80, color: AppColors.accent),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        ...question.options.map((option) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ElevatedButton(
-              onPressed: () => _answerQuestion(option, question.correctAnswer),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _getButtonColor(option, question.correctAnswer),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: Colors.white24),
-                ),
-              ),
-              child: Text(option, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
-            ),
-          );
-        }).toList(),
-      ],
-    );
+    return Center(child: Text("Exercício de Treinamento Auditivo - ${step.question.statement}"));
   }
 
   Widget _buildDragAndDropStep(DragAndDropStep step) {
-    final question = step.question;
-    return Column(
-      children: [
-        Text(question.statement, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 24),
-        Expanded(
-          child: DragAndDropLists(
-            children: _dndLists,
-            onItemReorder: (int oldItemIndex, int oldListIndex, int newItemIndex, int newListIndex) {
-              setState(() {
-                final movedItem = _dndLists[oldListIndex].children.removeAt(oldItemIndex);
-                _dndLists[newListIndex].children.insert(newItemIndex, movedItem);
-              });
-            },
-            onListReorder: (int oldListIndex, int newListIndex) {},
-            listPadding: const EdgeInsets.symmetric(vertical: 10),
-            itemDecorationWhileDragging: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.5),
-              boxShadow: [BoxShadow(color: AppColors.accent, blurRadius: 4)],
-            ),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            final List<String> userAnswers = _dndLists.length > 1
-                ? _dndLists[1].children.map((item) => ((item.child as ListTile).title as Text).data!).toList()
-                : [];
-            bool isCorrect = const ListEquality().equals(userAnswers, question.correctAnswers);
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(isCorrect ? 'Acorde correto!' : 'Tente novamente!'),
-                backgroundColor: isCorrect ? Colors.green : AppColors.primary,
-              ),
-            );
-
-            if (isCorrect) {
-              _nextStep();
-            }
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          child: const Text('VERIFICAR', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNoteTile(String noteName) {
-    return ListTile(
-      tileColor: AppColors.card,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      title: Text(noteName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-      leading: const Icon(Icons.music_note, color: AppColors.accent),
-    );
+    return Center(child: Text("Exercício de Arrastar e Soltar - ${step.question.statement}"));
   }
 
   Color _getButtonColor(String option, String correctAnswer) {
@@ -367,5 +312,15 @@ class _LessonScreenState extends State<LessonScreen> {
     if (option == _selectedAnswer) return _isCorrect! ? Colors.green : AppColors.primary;
     if (option == correctAnswer) return Colors.green;
     return AppColors.card;
+  }
+
+  // --- MÉTODO CORRIGIDO E ADICIONADO AQUI ---
+  Widget _buildNoteTile(String noteName) {
+    return ListTile(
+      tileColor: AppColors.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      title: Text(noteName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      leading: const Icon(Icons.music_note, color: AppColors.accent),
+    );
   }
 }
