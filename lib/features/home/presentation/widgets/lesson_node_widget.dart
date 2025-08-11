@@ -8,79 +8,77 @@ enum LessonStatus { locked, unlocked, completed }
 
 class LessonNodeWidget extends StatelessWidget {
   final Lesson lesson;
-  final VoidCallback? onTap;
   final LessonStatus status;
+  final VoidCallback onTap;
 
   const LessonNodeWidget({
     super.key,
     required this.lesson,
-    this.onTap,
     required this.status,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    Color nodeColor;
-    Color iconColor;
-    IconData displayIcon;
-    List<BoxShadow>? boxShadow;
+    Color backgroundColor;
+    IconData iconData;
+    Color iconColor = Colors.white;
+    bool isEnabled = status != LessonStatus.locked;
 
     switch (status) {
-      case LessonStatus.completed:
-        nodeColor = const Color(0xFF6A4C93); // Roxo
-        iconColor = Colors.white;
-        displayIcon = Icons.check;
+      case LessonStatus.locked:
+        backgroundColor = Colors.grey[800]!;
+        iconData = Icons.lock;
+        iconColor = Colors.white.withOpacity(0.7);
         break;
       case LessonStatus.unlocked:
-        nodeColor = AppColors.accent; // Dourado
-        iconColor = AppColors.background;
-        displayIcon = Icons.music_note;
-        boxShadow = [
-          BoxShadow(
-            color: AppColors.accent.withAlpha(128),
-            blurRadius: 12,
-            spreadRadius: 2,
-          ),
-        ];
+        backgroundColor = AppColors.primary;
+        iconData = Icons.music_note;
         break;
-      case LessonStatus.locked:
-      default:
-        nodeColor = Colors.grey.shade800;
-        iconColor = Colors.grey.shade600;
-        displayIcon = Icons.lock_outline;
+      case LessonStatus.completed:
+        backgroundColor = AppColors.accent;
+        iconData = Icons.check;
         break;
     }
 
     return GestureDetector(
-      onTap: status != LessonStatus.locked ? onTap : null,
+      onTap: isEnabled ? onTap : null,
       child: Container(
         width: 100,
         height: 100,
+        // *** DECORAÇÃO COM SOMBRA ADICIONADA AQUI ***
         decoration: BoxDecoration(
-          color: nodeColor,
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: boxShadow,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 10.0, // A intensidade do desfoque
+              spreadRadius: 1.0, // O quanto a sombra se espalha
+              offset: const Offset(
+                  0, 5), // Deslocamento: 0 na horizontal, 5 para baixo
+            ),
+          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // --- CORREÇÃO DO ÍCONE ---
-            Icon(displayIcon, color: iconColor, size: 36), // Tamanho do ícone reduzido
-            const SizedBox(height: 6), // Espaçamento ajustado
+            Icon(iconData, size: 36, color: iconColor),
+            const SizedBox(height: 8),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
                 lesson.title,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: iconColor.withAlpha(200),
-                  fontSize: 12,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
+                  fontSize: 12,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-            )
+            ),
           ],
         ),
       ),

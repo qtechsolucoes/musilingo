@@ -1,16 +1,12 @@
 // lib/features/lesson/presentation/view/lesson_screen.dart
 
-import 'package:collection/collection.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_lists.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
-import 'package:musilingo/features/lesson/data/models/drag_drop_question_model.dart';
-import 'package:musilingo/features/lesson/data/models/ear_training_question_model.dart';
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
-import 'package:musilingo/features/lesson/data/models/question_model.dart';
 import 'package:musilingo/main.dart';
 
 class LessonScreen extends StatefulWidget {
@@ -53,7 +49,7 @@ class _LessonScreenState extends State<LessonScreen> {
           .order('order', ascending: true);
 
       final steps = List<LessonStep>.from(
-        response.map((map) => LessonStep.fromMap(map as Map<String, dynamic>)),
+        response.map((map) => LessonStep.fromMap(map)),
       );
 
       if (mounted) {
@@ -242,7 +238,7 @@ class _LessonScreenState extends State<LessonScreen> {
               children: [
                 Text(step.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 24),
-                Text(step.content, style: TextStyle(fontSize: 18, color: AppColors.textSecondary, height: 1.5)),
+                Text(step.content, style: const TextStyle(fontSize: 18, color: AppColors.textSecondary, height: 1.5)),
               ],
             ),
           ),

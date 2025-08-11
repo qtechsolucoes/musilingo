@@ -22,7 +22,7 @@ class CustomTextField extends StatelessWidget {
       style: const TextStyle(color: AppColors.text),
       decoration: InputDecoration(
         labelText: labelText,
-        labelStyle: TextStyle(color: AppColors.textSecondary),
+        labelStyle: const TextStyle(color: AppColors.textSecondary),
         prefixIcon: Icon(prefixIcon, color: AppColors.accent),
         // Estilo da borda quando o campo não está focado.
         enabledBorder: OutlineInputBorder(

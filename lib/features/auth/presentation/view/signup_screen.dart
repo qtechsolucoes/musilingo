@@ -73,7 +73,7 @@ class _SignupScreenState extends State<SignupScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: BackButton(color: AppColors.text),
+        leading: const BackButton(color: AppColors.text),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -96,7 +96,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   style: const TextStyle(color: AppColors.text),
                   decoration: InputDecoration(
                     labelText: 'Nome',
-                    labelStyle: TextStyle(color: AppColors.textSecondary),
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
                     prefixIcon: const Icon(Icons.person_outline, color: AppColors.accent),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
@@ -109,7 +109,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   style: const TextStyle(color: AppColors.text),
                   decoration: InputDecoration(
                     labelText: 'E-mail',
-                    labelStyle: TextStyle(color: AppColors.textSecondary),
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
                     prefixIcon: const Icon(Icons.email_outlined, color: AppColors.accent),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
@@ -122,7 +122,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   style: const TextStyle(color: AppColors.text),
                   decoration: InputDecoration(
                     labelText: 'Senha',
-                    labelStyle: TextStyle(color: AppColors.textSecondary),
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
                     prefixIcon: const Icon(Icons.lock_outline, color: AppColors.accent),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
@@ -148,7 +148,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text('Já tem uma conta?', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+                    const Text('Já tem uma conta?', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pop();
