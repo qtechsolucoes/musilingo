@@ -6,10 +6,10 @@ import 'package:musilingo/app/data/models/lesson_model.dart';
 import 'package:musilingo/features/lesson/data/models/question_model.dart';
 import 'package:musilingo/features/lesson/data/models/drag_drop_question_model.dart';
 import 'package:musilingo/features/lesson/data/models/ear_training_question_model.dart';
+import 'package:musilingo/features/lesson/data/models/multiple_choice_question_model.dart'; // <-- IMPORT ADICIONADO
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/main.dart';
 import 'package:just_audio/just_audio.dart';
-// A importação de 'drag_and_drop_lists' foi removida daqui.
 
 class LessonScreen extends StatefulWidget {
   final Lesson lesson;
@@ -141,8 +141,11 @@ class _LessonScreenState extends State<LessonScreen> {
     );
   }
 
+  // 3. ADICIONADO O 'case' PARA multipleChoice
   Widget _buildQuestionWidget(Question question) {
     switch (question.type) {
+      case QuestionType.multipleChoice:
+        return _buildMultipleChoiceQuestion(question as MultipleChoiceQuestion);
       case QuestionType.dragAndDrop:
         return _buildDragAndDropQuestion(question as DragAndDropQuestion);
       case QuestionType.earTraining:
@@ -150,40 +153,15 @@ class _LessonScreenState extends State<LessonScreen> {
     }
   }
 
-  Widget _buildDragAndDropQuestion(DragAndDropQuestion question) {
-    return const Center(child: Text("Pergunta de Arrastar e Soltar"));
-  }
-
-  Widget _buildEarTrainingQuestion(EarTrainingQuestion question) {
+  // 4. ADICIONADO O MÉTODO PARA CONSTRUIR A UI DA MÚLTIPLA ESCOLHA
+  Widget _buildMultipleChoiceQuestion(MultipleChoiceQuestion question) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          question.text,
+          question.questionText,
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 40),
-        IconButton(
-          icon: const Icon(Icons.play_circle_fill),
-          iconSize: 64,
-          color: AppColors.primary,
-          onPressed: () async {
-            try {
-              if (question.audioUrl.startsWith('http')) {
-                await _audioPlayer.setUrl(question.audioUrl);
-              } else {
-                await _audioPlayer.setAsset(question.audioUrl);
-              }
-              _audioPlayer.play();
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Erro ao tocar o áudio.')),
-                );
-              }
-            }
-          },
         ),
         const SizedBox(height: 40),
         ...question.options.map((option) {
@@ -201,5 +179,15 @@ class _LessonScreenState extends State<LessonScreen> {
         }),
       ],
     );
+  }
+
+  Widget _buildDragAndDropQuestion(DragAndDropQuestion question) {
+    // A sua lógica para a questão de arrastar e soltar irá aqui
+    return const Center(child: Text("Pergunta de Arrastar e Soltar"));
+  }
+
+  Widget _buildEarTrainingQuestion(EarTrainingQuestion question) {
+    // A sua lógica para a questão de treino auditivo irá aqui
+    return const Center(child: Text("Pergunta de Treino Auditivo"));
   }
 }

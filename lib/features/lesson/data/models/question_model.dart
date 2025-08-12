@@ -2,8 +2,11 @@
 
 import 'package:musilingo/features/lesson/data/models/drag_drop_question_model.dart';
 import 'package:musilingo/features/lesson/data/models/ear_training_question_model.dart';
+import 'package:musilingo/features/lesson/data/models/multiple_choice_question_model.dart';
 
+// 1. ADICIONADO O TIPO 'multipleChoice'
 enum QuestionType {
+  multipleChoice,
   dragAndDrop,
   earTraining,
 }
@@ -20,15 +23,17 @@ abstract class Question {
     final type = QuestionType.values.firstWhere(
       (e) => e.toString() == 'QuestionType.$typeString',
       orElse: () =>
-          throw Exception('Tipo de questão desconhecido: $typeString'),
+          throw Exception('TIPO DE QUESTÃO DESCONHECIDO: $typeString'),
     );
 
+    // 2. ADICIONADO O 'case' PARA O NOVO TIPO
     switch (type) {
+      case QuestionType.multipleChoice:
+        return MultipleChoiceQuestion.fromMap(map);
       case QuestionType.dragAndDrop:
         return DragAndDropQuestion.fromMap(map);
       case QuestionType.earTraining:
         return EarTrainingQuestion.fromMap(map);
-      // A cláusula 'default' foi removida pois o switch já cobre todos os casos.
     }
   }
 }
