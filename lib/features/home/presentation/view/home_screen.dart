@@ -319,14 +319,14 @@ class _HomeScreenState extends State<HomeScreen> {
         x = (screenWidth / 2) - (nodeWidth / 2);
         break;
       case 1:
-        x = screenWidth * 0.9 - nodeWidth;
+        x = screenWidth * 0.95 - nodeWidth;
         break;
       case 2:
         x = (screenWidth / 2) - (nodeWidth / 2);
         break;
       case 3:
       default:
-        x = screenWidth * 0.1;
+        x = screenWidth * 0.05;
         break;
     }
     return Offset(x, y);
@@ -354,7 +354,7 @@ class PathPainter extends CustomPainter {
     double nodeSize = 100.0; // Usando um valor fixo para robustez
 
     // Raio da curva proporcional ao tamanho do bloco
-    final double cornerRadius = nodeSize * 0.2; // Ajustado para 40%
+    final double cornerRadius = nodeSize * 0.1; // Ajustado para 10%
 
     final path = Path();
 
