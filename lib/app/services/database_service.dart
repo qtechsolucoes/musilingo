@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:musilingo/app/data/models/module_model.dart';
 import 'package:musilingo/app/data/models/user_profile_model.dart';
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
+import 'package:musilingo/features/lesson/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/main.dart';
 
 class DatabaseService {
@@ -41,15 +42,12 @@ class DatabaseService {
   }
 
   // --- MÉTODOS DE PERFIL ---
-
   Future<UserProfile?> getProfile(String userId) async {
     final response = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle(); // CORREÇÃO: Usando maybeSingle() em vez de single()
-
-    // Se a resposta for nula (nenhum perfil encontrado), retorna null.
+        .maybeSingle();
     if (response == null || response.isEmpty) {
       return null;
     }
@@ -77,15 +75,24 @@ class DatabaseService {
   Future<String> uploadAvatar(String userId, File image) async {
     final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
     final bucket = supabase.storage.from('lesson_assets');
-
     await bucket.upload(fileName, image);
-
     final publicUrl = bucket.getPublicUrl(fileName);
-
     await supabase
         .from('profiles')
         .update({'avatar_url': publicUrl}).eq('id', userId);
-
     return publicUrl;
+  }
+
+  // --- NOVO MÉTODO PARA O MODO PRÁTICA ---
+  Future<List> getMelodicExercises() async {
+    final response = await supabase
+        .from('practice_melodies')
+        .select('*')
+        .order('difficulty', ascending: true)
+        .order('id', ascending: true);
+
+    return (response as List)
+        .map((data) => MelodicExercise.fromMap(data))
+        .toList();
   }
 }
