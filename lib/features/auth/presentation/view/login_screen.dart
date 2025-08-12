@@ -19,6 +19,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   Future<void> _signIn() async {
+    // --- CORREÇÃO INÍCIO ---
+    // Armazenamos o Navigator e o ScaffoldMessenger antes da chamada assíncrona
+    // para evitar o uso do `context` através de um `async gap`.
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    // --- CORREÇÃO FIM ---
+
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -30,21 +37,23 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text.trim(),
       );
 
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
-              (route) => false,
-        );
-      }
+      // --- CORREÇÃO INÍCIO ---
+      // Usamos a variável local `navigator`.
+      navigator.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+        (route) => false,
+      );
+      // --- CORREÇÃO FIM ---
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro no login: ${error.toString()}'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
-      }
+      // --- CORREÇÃO INÍCIO ---
+      // Usamos a variável local `scaffoldMessenger`.
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Erro no login: ${error.toString()}'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      // --- CORREÇÃO FIM ---
     } finally {
       if (mounted) {
         setState(() {
@@ -78,9 +87,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 SizedBox(height: MediaQuery.of(context).size.height * 0.1),
                 const Icon(Icons.music_note, color: AppColors.accent, size: 80),
                 const SizedBox(height: 24),
-                const Text('Bem-vindo de volta!', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                const Text('Bem-vindo de volta!',
+                    textAlign: TextAlign.center,
+                    style:
+                        TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text('Sentimos sua falta.', textAlign: TextAlign.center, style: TextStyle(fontSize: 18, color: AppColors.textSecondary)),
+                const Text('Sentimos sua falta.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 18, color: AppColors.textSecondary)),
                 const SizedBox(height: 48),
                 TextField(
                   controller: _emailController,
@@ -89,9 +104,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     labelText: 'E-mail',
                     labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.accent),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
+                    prefixIcon: const Icon(Icons.email_outlined,
+                        color: AppColors.accent),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.white24)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.accent)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -102,9 +122,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     labelText: 'Senha',
                     labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.lock_outline, color: AppColors.accent),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
+                    prefixIcon:
+                        const Icon(Icons.lock_outline, color: AppColors.accent),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.white24)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.accent)),
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -113,23 +138,33 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('ENTRAR', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+                      : const Text('ENTRAR',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text)),
                 ),
                 const SizedBox(height: 16),
                 Wrap(
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const Text('Não tem uma conta?', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+                    const Text('Não tem uma conta?',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 16)),
                     TextButton(
                       onPressed: () {
-                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const SignupScreen()));
+                        Navigator.of(context).push(MaterialPageRoute(
+                            builder: (context) => const SignupScreen()));
                       },
-                      child: const Text('Cadastre-se', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: const Text('Cadastre-se',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

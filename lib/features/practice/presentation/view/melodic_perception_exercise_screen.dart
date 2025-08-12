@@ -1,22 +1,61 @@
 // lib/features/practice/presentation/view/melodic_perception_exercise_screen.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_midi/flutter_midi.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
-// Representa uma nota colocada pelo usuário na pauta
-class UserNote {
-  final String figure; // ex: "quarter"
-  final int staffPosition; // Posição na pauta (0 = linha de baixo, etc.)
-  bool? isCorrect; // Nulo = não verificado, true = correto, false = incorreto
+// Classe de utilidades para conversões e lógicas musicais
+class MusicUtils {
+  static const Map<String, int> _noteValues = {
+    'C': 0,
+    'C#': 1,
+    'DB': 1,
+    'D': 2,
+    'D#': 3,
+    'EB': 3,
+    'E': 4,
+    'F': 5,
+    'F#': 6,
+    'GB': 6,
+    'G': 7,
+    'G#': 8,
+    'AB': 8,
+    'A': 9,
+    'A#': 10,
+    'BB': 10,
+    'B': 11
+  };
 
-  UserNote({required this.figure, required this.staffPosition, this.isCorrect});
+  static int noteNameToMidi(String noteName) {
+    if (noteName.length < 2) return 60; // Retorna Dó central como padrão
+    try {
+      final octave = int.parse(noteName.substring(noteName.length - 1));
+      final key = noteName.substring(0, noteName.length - 1).toUpperCase();
+      if (!_noteValues.containsKey(key)) return 60;
+      return _noteValues[key]! + (octave + 1) * 12;
+    } catch (e) {
+      return 60;
+    }
+  }
+
+  // Mapeamento de nomes internos (inglês) para valores de duração (semínima = 1.0)
+  static const Map<String, double> figureDurations = {
+    'whole': 4.0,
+    'half': 2.0,
+    'quarter': 1.0,
+    'eighth': 0.5,
+    '16th': 0.25,
+    '32nd': 0.125,
+    '64th': 0.0625
+  };
 }
 
 class MelodicPerceptionExerciseScreen extends StatefulWidget {
   final MelodicExercise exercise;
-
   const MelodicPerceptionExerciseScreen({super.key, required this.exercise});
 
   @override
@@ -26,301 +65,431 @@ class MelodicPerceptionExerciseScreen extends StatefulWidget {
 
 class _MelodicPerceptionExerciseScreenState
     extends State<MelodicPerceptionExerciseScreen> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  final AudioPlayer _metronomePlayer = AudioPlayer();
+  late final WebViewController _controller;
+  final FlutterMidi _flutterMidi = FlutterMidi();
+  bool _isWebViewReady = false;
+  bool _isSoundfontReady = false;
 
-  // Gerencia o estado do exercício
-  String? _selectedFigure;
-  final List<UserNote> _userSequence = [];
+  List<String> _userSequence = [];
   bool _isVerified = false;
-  bool _isMetronomePlaying = false;
+  final List<String> _notePalette = [
+    "C4",
+    "D4",
+    "E4",
+    "F4",
+    "G4",
+    "A4",
+    "B4",
+    "C5"
+  ];
+
+  // Paleta de figuras com nomes, valores e símbolos
+  final Map<String, String> _figurePalette = {
+    'whole': 'Semibreve (𝅝)',
+    'half': 'Mínima (𝅗𝅥)',
+    'quarter': 'Semínima (♩)',
+    'eighth': 'Colcheia (♪)',
+    '16th': 'Semicolcheia (♬)',
+  };
+  String _selectedNote = "C4";
+  String _selectedFigure = "quarter"; // Valor interno em inglês
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showReferenceNoteDialog();
-      _setupMetronome();
-    });
+    _initializeScreen();
   }
 
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    _metronomePlayer.dispose();
-    super.dispose();
+  Future<void> _initializeScreen() async {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.landscapeLeft,
+    ]);
+
+    await _loadSoundfont();
+
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(AppColors.background)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (String url) {
+            if (mounted) {
+              setState(() {
+                _isWebViewReady = true;
+              });
+              _renderBlankStaff();
+            }
+          },
+        ),
+      )
+      ..loadFlutterAsset('assets/web/index.html');
   }
 
-  void _setupMetronome() async {
-    // Carrega um som de metronomo simples
-    await _metronomePlayer.setAsset('assets/audio/metronome_click.mp3');
-    _metronomePlayer.setLoopMode(LoopMode.one);
-  }
-
-  void _toggleMetronome() {
-    if (_isMetronomePlaying) {
-      _metronomePlayer.pause();
-    } else {
-      _metronomePlayer.play();
-    }
-    setState(() {
-      _isMetronomePlaying = !_isMetronomePlaying;
-    });
-  }
-
-  Future<void> _playAudio(String url) async {
+  Future<void> _loadSoundfont() async {
     try {
-      // Usa a URL do exercício, mas com um placeholder por enquanto.
-      await _audioPlayer.setUrl(url);
-      _audioPlayer.play();
+      _flutterMidi.unmute();
+      ByteData sf2 = await rootBundle.load('assets/sf2/GeneralUserGS.sf2');
+      await _flutterMidi.prepare(sf2: sf2, name: 'GeneralUserGS.sf2');
+      if (mounted) {
+        setState(() {
+          _isSoundfontReady = true;
+        });
+      }
     } catch (e) {
+      debugPrint("Erro ao carregar o soundfont: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar áudio: $e')),
+          SnackBar(
+              content: Text('Erro fatal ao carregar sons: ${e.toString()}')),
         );
       }
     }
   }
 
-  void _verifyAnswer() {
-    setState(() {
-      _isVerified = true;
-      final correctSequence = widget.exercise.correctSequence;
-      for (int i = 0; i < _userSequence.length; i++) {
-        if (i < correctSequence.length) {
-          final userNoteString = _userSequence[i].figure;
-          final correctNoteString = correctSequence[i].split('_').last;
-          _userSequence[i].isCorrect = (userNoteString == correctNoteString);
-        } else {
-          _userSequence[i].isCorrect = false;
-        }
-      }
-    });
+  @override
+  void dispose() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.landscapeLeft,
+    ]);
+    super.dispose();
   }
 
-  void _addNoteToStaff(int staffPosition) {
-    if (_selectedFigure != null && !_isVerified) {
-      setState(() {
-        _userSequence.add(
-            UserNote(figure: _selectedFigure!, staffPosition: staffPosition));
-      });
+  Future<void> _playExerciseMelody() async {
+    if (!_isSoundfontReady) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Instrumentos ainda não estão prontos.'),
+      ));
+      return;
+    }
+    const double bpm = 100.0;
+    const double quarterNoteDurationMs = 60000.0 / bpm;
+
+    for (String noteData in widget.exercise.correctSequence) {
+      final parts = noteData.split('_');
+      final noteName = parts[0];
+      final durationName = parts[1];
+
+      final midiNote = MusicUtils.noteNameToMidi(noteName);
+      final durationMultiplier =
+          MusicUtils.figureDurations[durationName] ?? 1.0;
+      final noteDuration = (quarterNoteDurationMs * durationMultiplier).round();
+
+      _flutterMidi.playMidiNote(midi: midiNote);
+      await Future.delayed(Duration(milliseconds: noteDuration));
+      _flutterMidi.stopMidiNote(midi: midiNote);
     }
   }
 
-  Future<void> _showReferenceNoteDialog() {
-    return showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Nota de Referência'),
-        content: Text(
-          'O exercício está em ${widget.exercise.keySignature} Maior. A nota de referência é ${widget.exercise.referenceNote}.\n\nDeseja ouvi-la?',
-          style: const TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Não'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () {
-              // TODO: Conectar ao áudio real da nota de referência
-              _playAudio(widget.exercise.referenceNoteAudioUrl);
-              Navigator.of(context).pop();
-            },
-            child: const Text('Sim, ouvir'),
-          ),
-        ],
-      ),
-    );
+  void _addNoteToSequence() {
+    if (_isVerified) return;
+
+    final timeSignatureParts = widget.exercise.timeSignature.split('/');
+    final beatsPerMeasure = int.parse(timeSignatureParts[0]);
+    final beatType = int.parse(timeSignatureParts[1]);
+    final measureCapacity = beatsPerMeasure * (4.0 / beatType);
+
+    double currentMeasureDuration = 0;
+    for (var noteData in _userSequence) {
+      final duration = MusicUtils.figureDurations[noteData.split('_')[1]] ?? 0;
+      currentMeasureDuration += duration;
+      if (currentMeasureDuration >= measureCapacity) {
+        currentMeasureDuration -= measureCapacity;
+      }
+    }
+
+    final newNoteDuration = MusicUtils.figureDurations[_selectedFigure] ?? 0;
+    if (currentMeasureDuration + newNoteDuration > measureCapacity) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('A figura não cabe neste compasso!'),
+        backgroundColor: Colors.redAccent,
+      ));
+      return;
+    }
+
+    setState(() {
+      _userSequence.add("${_selectedNote}_$_selectedFigure");
+    });
+    _renderUserSequence();
+  }
+
+  void _removeLastNote() {
+    if (_isVerified || _userSequence.isEmpty) return;
+    setState(() {
+      _userSequence.removeLast();
+    });
+    _renderUserSequence();
+  }
+
+  void _renderUserSequence(
+      {String Function(String note, bool isCorrect)? colorizer}) {
+    final timeSignature = widget.exercise.timeSignature;
+    final beatsPerMeasure = int.parse(timeSignature.split('/')[0]);
+    final beatType = int.parse(timeSignature.split('/')[1]);
+    final measureCapacity = beatsPerMeasure * (4.0 / beatType);
+
+    StringBuffer measuresXml = StringBuffer();
+    double currentMeasureDuration = 0;
+    int measureNumber = 1;
+
+    measuresXml.write('<measure number="$measureNumber">');
+    if (measureNumber == 1) {
+      measuresXml.write(
+          '<attributes><divisions>4</divisions><key><fifths>0</fifths></key>');
+      measuresXml.write(
+          '<time><beats>$beatsPerMeasure</beats><beat-type>$beatType</beat-type></time>');
+      measuresXml.write(
+          '<clef><sign>${widget.exercise.clef == 'treble' ? 'G' : 'F'}</sign><line>${widget.exercise.clef == 'treble' ? '2' : '4'}</line></clef></attributes>');
+    }
+
+    for (var entry in _userSequence.asMap().entries) {
+      final index = entry.key;
+      final noteData = entry.value.split('_');
+      final noteName = noteData[0];
+      final figure = noteData[1];
+      final step = noteName[0];
+      final octave = noteName.substring(1);
+      final noteDuration = MusicUtils.figureDurations[figure] ?? 0;
+
+      String colorTag = "";
+      if (colorizer != null) {
+        final isCorrect = index < widget.exercise.correctSequence.length &&
+            widget.exercise.correctSequence[index] == entry.value;
+        colorTag = colorizer(entry.value, isCorrect);
+      }
+
+      final xmlDuration = (noteDuration * 4).toInt();
+
+      measuresXml.write("""
+      <note $colorTag>
+        <pitch><step>$step</step><octave>$octave</octave></pitch>
+        <duration>$xmlDuration</duration><type>$figure</type>
+      </note>
+      """);
+
+      currentMeasureDuration += noteDuration;
+      if (currentMeasureDuration >= measureCapacity) {
+        measuresXml.write('</measure>');
+        measureNumber++;
+        measuresXml.write('<measure number="$measureNumber">');
+        currentMeasureDuration = 0;
+      }
+    }
+
+    if (!measuresXml.toString().endsWith('</measure>')) {
+      measuresXml.write('</measure>');
+    }
+
+    final fullXml = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+    <score-partwise>
+      <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+      <part id="P1">${measuresXml.toString()}</part>
+    </score-partwise>
+    """;
+    _loadScoreIntoWebView(fullXml);
+  }
+
+  void _renderBlankStaff() {
+    // Usa o MusicXML que veio do banco de dados para a pauta em branco
+    _loadScoreIntoWebView(widget.exercise.musicXml);
+  }
+
+  void _verifyAnswer() {
+    setState(() {
+      _isVerified = true;
+    });
+    _renderUserSequence(colorizer: (note, isCorrect) {
+      return 'color="${isCorrect ? '#4CAF50' : '#F44336'}"';
+    });
+  }
+
+  void _loadScoreIntoWebView(String musicXml) {
+    if (_isWebViewReady) {
+      final escapedXml = musicXml
+          .replaceAll('\\', '\\\\')
+          .replaceAll("`", "\\`")
+          .replaceAll("\n", "")
+          .replaceAll("\r", "");
+      _controller.runJavaScript('window.loadScore(`$escapedXml`)');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_isWebViewReady || !_isSoundfontReady) {
+      return Scaffold(
+          appBar: AppBar(
+            title: Text(widget.exercise.title),
+            backgroundColor: AppColors.background,
+          ),
+          body: const Center(
+              child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: AppColors.accent),
+              SizedBox(height: 16),
+              Text("Carregando..."),
+            ],
+          )));
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.exercise.title),
         backgroundColor: AppColors.background,
         actions: [
           IconButton(
-            icon: const Icon(Icons.undo),
-            onPressed: _isVerified
-                ? null
-                : () {
-                    setState(() {
-                      if (_userSequence.isNotEmpty) {
-                        _userSequence.removeLast();
-                      }
-                    });
-                  },
-            tooltip: 'Desfazer',
-          )
+            icon: const Icon(Icons.hearing),
+            tooltip: "Ouvir a melodia",
+            onPressed: _playExerciseMelody,
+          ),
+          if (_isVerified)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: "Tentar Novamente",
+              onPressed: () {
+                setState(() {
+                  _userSequence = [];
+                  _isVerified = false;
+                });
+                _renderBlankStaff();
+              },
+            ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(8.0),
         child: Column(
           children: [
-            // Pentagrama Interativo
             Expanded(
-              flex: 3,
-              child: GestureDetector(
-                onTapDown: (details) {
-                  final RenderBox box = context.findRenderObject() as RenderBox;
-                  final localPosition =
-                      box.globalToLocal(details.globalPosition);
-                  final staffHeight = box.size.height;
-                  // Simplificação: 11 posições (5 linhas, 4 espaços, 2 suplementares)
-                  final position =
-                      (localPosition.dy / (staffHeight / 11)).floor();
-                  _addNoteToStaff(position);
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.primary.withAlpha(128)),
-                  ),
-                  child: CustomPaint(
-                    painter: StaffPainter(
-                      clef: widget.exercise.clef,
-                      userNotes: _userSequence,
-                    ),
-                    size: Size.infinite,
-                  ),
+              flex: 5,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary.withAlpha(100)),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: WebViewWidget(controller: _controller),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            // Paleta de Figuras
+            const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Wrap(
-                spacing: 8.0,
-                alignment: WrapAlignment.center,
-                children: widget.exercise.possibleFigures.map((figure) {
-                  return ActionChip(
-                    label: Text(figure),
-                    backgroundColor: _selectedFigure == figure
-                        ? AppColors.accent
-                        : AppColors.primary,
-                    onPressed: _isVerified
-                        ? null
-                        : () {
-                            setState(() {
-                              _selectedFigure = figure;
-                            });
-                          },
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Botões de ação
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              height: 120,
+              padding:
+                  const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
               decoration: BoxDecoration(
                 color: AppColors.card,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  IconButton(
-                    onPressed: () => _playAudio(widget.exercise.audioUrl),
-                    icon: const Icon(Icons.play_arrow),
-                    iconSize: 32,
-                    tooltip: 'Ouvir Melodia',
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: _notePalette
+                                  .map((note) => Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4.0),
+                                        child: ActionChip(
+                                          label: Text(note),
+                                          backgroundColor: _selectedNote == note
+                                              ? AppColors.accent
+                                              : AppColors.primary,
+                                          onPressed: () => setState(
+                                              () => _selectedNote = note),
+                                        ),
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: _figurePalette.entries
+                                  .map((entry) => Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4.0),
+                                        child: ActionChip(
+                                          label: Text(entry.value),
+                                          backgroundColor:
+                                              _selectedFigure == entry.key
+                                                  ? AppColors.accent
+                                                  : AppColors.primary,
+                                          onPressed: () => setState(() =>
+                                              _selectedFigure = entry.key),
+                                        ),
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.timer_outlined),
-                    iconSize: 32,
-                    tooltip: 'Metrônomo',
-                  ),
-                  ElevatedButton(
-                    onPressed: _isVerified || _userSequence.isEmpty
-                        ? null
-                        : _verifyAnswer,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.completed),
-                    child: const Text('Verificar Resposta'),
+                  const VerticalDivider(
+                      width: 24,
+                      indent: 8,
+                      endIndent: 8,
+                      color: Colors.white24),
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: _addNoteToSequence,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text("Nota"),
+                              style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12)),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: _removeLastNote,
+                              icon: const Icon(Icons.undo, size: 18),
+                              label: const Text("Desfazer"),
+                              style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12)),
+                            ),
+                          ],
+                        ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isVerified ? null : _verifyAnswer,
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.completed),
+                            child: const Text('Verificar Resposta'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            )
+            ),
           ],
         ),
       ),
     );
-  }
-}
-
-// CustomPainter para desenhar o pentagrama e as notas
-class StaffPainter extends CustomPainter {
-  final String clef;
-  final List<UserNote> userNotes;
-
-  StaffPainter({required this.clef, required this.userNotes});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withAlpha(128)
-      ..strokeWidth = 1.5;
-
-    // Desenha as 5 linhas da pauta
-    for (int i = 0; i < 5; i++) {
-      final y = size.height * (0.3 + i * 0.1);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-
-    // Desenha a clave
-    final textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-    );
-
-    if (clef == 'treble') {
-      textPainter.text = TextSpan(
-        text: '𝄞', // Símbolo da clave de Sol
-        style: TextStyle(fontSize: size.height * 0.5, color: Colors.white),
-      );
-    } else {
-      // 'bass'
-      textPainter.text = TextSpan(
-        text: '𝄢', // Símbolo da clave de Fá
-        style: TextStyle(fontSize: size.height * 0.3, color: Colors.white),
-      );
-    }
-
-    textPainter.layout();
-    final yOffset = (clef == 'treble') ? size.height * 0.2 : size.height * 0.35;
-    textPainter.paint(canvas, Offset(size.width * 0.02, yOffset));
-
-    // Desenha as notas inseridas pelo usuário
-    for (int i = 0; i < userNotes.length; i++) {
-      final note = userNotes[i];
-      final notePaint = Paint()
-        ..color = note.isCorrect == null
-            ? Colors.white
-            : (note.isCorrect! ? Colors.greenAccent : Colors.redAccent);
-
-      final x = size.width * (0.25 + i * 0.1);
-      final y = size.height * (0.05 * note.staffPosition);
-
-      canvas.drawCircle(Offset(x, y), 10, notePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return true;
   }
 }

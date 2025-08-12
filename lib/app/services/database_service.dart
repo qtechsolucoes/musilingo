@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:musilingo/app/data/models/module_model.dart';
 import 'package:musilingo/app/data/models/user_profile_model.dart';
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
-import 'package:musilingo/app/data/models/melodic_exercise_model.dart'; // CORREÇÃO: Caminho do import ajustado
+import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/main.dart';
 
 class DatabaseService {
@@ -83,10 +83,13 @@ class DatabaseService {
     return publicUrl;
   }
 
-  // --- NOVO MÉTODO PARA O MODO PRÁTICA ---
+  // --- ALTERAÇÃO INÍCIO ---
+  // Apenas esta função é alterada para se alinhar ao novo modelo de dados.
   Future<List<MelodicExercise>> getMelodicExercises() async {
     final response = await supabase
         .from('practice_melodies')
+        // A query continua a mesma ('*'), mas o `MelodicExercise.fromMap` agora
+        // irá procurar pelo novo campo 'music_xml'.
         .select('*')
         .order('difficulty', ascending: true)
         .order('id', ascending: true);
@@ -95,4 +98,5 @@ class DatabaseService {
         .map((data) => MelodicExercise.fromMap(data))
         .toList();
   }
+  // --- ALTERAÇÃO FIM ---
 }

@@ -8,11 +8,13 @@ class MelodicExercise {
   final String keySignature;
   final String timeSignature;
   final String referenceNote;
-  final List<String> possibleNotes;
-  final List<String> possibleFigures;
+  final String musicXml;
+
+  // --- ALTERAÇÃO INÍCIO ---
+  // A sequência correta de notas volta a fazer parte do modelo.
+  // Ela será usada como gabarito para a verificação.
   final List<String> correctSequence;
-  final String audioUrl;
-  final String referenceNoteAudioUrl;
+  // --- ALTERAÇÃO FIM ---
 
   MelodicExercise({
     required this.id,
@@ -22,11 +24,10 @@ class MelodicExercise {
     required this.keySignature,
     required this.timeSignature,
     required this.referenceNote,
-    required this.possibleNotes,
-    required this.possibleFigures,
+    required this.musicXml,
+    // --- ALTERAÇÃO INÍCIO ---
     required this.correctSequence,
-    required this.audioUrl,
-    required this.referenceNoteAudioUrl,
+    // --- ALTERAÇÃO FIM ---
   });
 
   factory MelodicExercise.fromMap(Map<String, dynamic> map) {
@@ -38,13 +39,11 @@ class MelodicExercise {
       keySignature: map['key_signature'] ?? 'C',
       timeSignature: map['time_signature'] ?? '4/4',
       referenceNote: map['reference_note'] ?? 'C4',
-      possibleNotes: List<String>.from(map['possible_notes'] ?? []),
-      possibleFigures: List<String>.from(map['possible_figures'] ?? []),
+      musicXml: map['music_xml'] ?? '',
+      // --- ALTERAÇÃO INÍCIO ---
+      // Lendo a sequência do banco de dados novamente.
       correctSequence: List<String>.from(map['correct_sequence'] ?? []),
-      audioUrl: map['audio_url'] ?? '',
-      referenceNoteAudioUrl: map['reference_note_audio_url'] ?? '',
+      // --- ALTERAÇÃO FIM ---
     );
   }
-
-  static fromJson(e) {}
 }

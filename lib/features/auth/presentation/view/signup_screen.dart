@@ -19,6 +19,11 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
 
   Future<void> _signUp() async {
+    // --- CORREÇÃO INÍCIO ---
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    // --- CORREÇÃO FIM ---
+
     if (!mounted) return;
 
     setState(() {
@@ -32,24 +37,24 @@ class _SignupScreenState extends State<SignupScreen> {
         data: {'full_name': _nameController.text.trim()},
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sucesso! Verifique seu e-mail para confirmação.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.of(context).pop();
-      }
+      // --- CORREÇÃO INÍCIO ---
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Sucesso! Verifique seu e-mail para confirmação.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      navigator.pop();
+      // --- CORREÇÃO FIM ---
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro no cadastro: ${error.toString()}'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
-      }
+      // --- CORREÇÃO INÍCIO ---
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Erro no cadastro: ${error.toString()}'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      // --- CORREÇÃO FIM ---
     } finally {
       if (mounted) {
         setState(() {
@@ -97,9 +102,14 @@ class _SignupScreenState extends State<SignupScreen> {
                   decoration: InputDecoration(
                     labelText: 'Nome',
                     labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.person_outline, color: AppColors.accent),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
+                    prefixIcon: const Icon(Icons.person_outline,
+                        color: AppColors.accent),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.white24)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.accent)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -110,9 +120,14 @@ class _SignupScreenState extends State<SignupScreen> {
                   decoration: InputDecoration(
                     labelText: 'E-mail',
                     labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.accent),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
+                    prefixIcon: const Icon(Icons.email_outlined,
+                        color: AppColors.accent),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.white24)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.accent)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -123,9 +138,14 @@ class _SignupScreenState extends State<SignupScreen> {
                   decoration: InputDecoration(
                     labelText: 'Senha',
                     labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.lock_outline, color: AppColors.accent),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
+                    prefixIcon:
+                        const Icon(Icons.lock_outline, color: AppColors.accent),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.white24)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.accent)),
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -134,26 +154,34 @@ class _SignupScreenState extends State<SignupScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : const Text(
-                    'CADASTRAR',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text),
-                  ),
+                          'CADASTRAR',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text),
+                        ),
                 ),
                 const SizedBox(height: 16),
                 Wrap(
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const Text('Já tem uma conta?', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+                    const Text('Já tem uma conta?',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 16)),
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pop();
                       },
-                      child: const Text('Faça Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: const Text('Faça Login',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
