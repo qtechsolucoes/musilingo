@@ -5,9 +5,11 @@ import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
 import 'package:musilingo/app/presentation/view/splash_screen.dart';
 import 'package:musilingo/app/services/database_service.dart';
+import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/home/presentation/widgets/lesson_node_widget.dart';
 import 'package:musilingo/features/lesson/presentation/view/lesson_screen.dart';
 import 'package:musilingo/main.dart';
+import 'package:provider/provider.dart';
 
 class World {
   final int index;
@@ -76,6 +78,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final userSession = context.watch<UserSession>();
+    final user = userSession.currentUser;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.background,
@@ -83,19 +88,21 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Trilha de Aprendizagem',
             style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          const Row(children: [
-            Icon(Icons.favorite, color: AppColors.primary),
-            SizedBox(width: 4),
-            Text('5',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            SizedBox(width: 16),
+          Row(children: [
+            const Icon(Icons.favorite, color: AppColors.primary),
+            const SizedBox(width: 4),
+            Text(user?.lives.toString() ?? '0',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 16),
           ]),
-          const Row(children: [
-            Icon(Icons.music_note, color: AppColors.accent),
-            SizedBox(width: 4),
-            Text('816',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            SizedBox(width: 16),
+          Row(children: [
+            const Icon(Icons.music_note, color: AppColors.accent),
+            const SizedBox(width: 4),
+            Text(user?.points.toString() ?? '0',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 16),
           ]),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -285,11 +292,14 @@ class _HomeScreenState extends State<HomeScreen> {
             lesson: lesson,
             status: status,
             onTap: () async {
-              await Navigator.of(context).push(
+              final result = await Navigator.of(context).push(
                 MaterialPageRoute(
                     builder: (context) => LessonScreen(lesson: lesson)),
               );
-              _refreshData();
+              // Se a lição foi completada, atualiza os dados da tela
+              if (result == true) {
+                _refreshData();
+              }
             },
           ),
         ),
@@ -333,7 +343,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- PINTOR COM A SUA LÓGICA DE LINHAS INTEGRADA ---
 class PathPainter extends CustomPainter {
   final List<Offset> nodePositions;
 
@@ -342,19 +351,15 @@ class PathPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF5a5a8a) // cor da linha
+      ..color = const Color(0xFF5a5a8a)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 12.0 // espessura
+      ..strokeWidth = 12.0
       ..strokeCap = StrokeCap.round;
 
     if (nodePositions.length < 2) return;
 
-    // --- Calcula tamanho médio do bloco ---
-    // Pressupõe que os nodes são quadrados e o espaçamento é consistente
-    double nodeSize = 100.0; // Usando um valor fixo para robustez
-
-    // Raio da curva proporcional ao tamanho do bloco
-    final double cornerRadius = nodeSize * 0.1; // Ajustado para 10%
+    double nodeSize = 100.0;
+    final double cornerRadius = nodeSize * 0.1;
 
     final path = Path();
 
@@ -374,25 +379,18 @@ class PathPainter extends CustomPainter {
       final dx = end.dx - start.dx;
       final dy = end.dy - start.dy;
 
-      // Movimento em L com canto arredondado (lógica vertical primeiro)
-      // Esta nova lógica é mais robusta e cria o caminho vertical primeiro, como nas imagens
-
-      // Ponto de "quina" da linha em L
       final cornerPoint = Offset(start.dx, end.dy);
 
-      // 1. Desenha a linha vertical, parando antes da curva
       path.lineTo(cornerPoint.dx,
           cornerPoint.dy - cornerRadius * (end.dy - start.dy).sign);
 
-      // 2. Desenha o arco (a curva suave)
       path.arcToPoint(
         Offset(cornerPoint.dx + cornerRadius * (end.dx - start.dx).sign,
             cornerPoint.dy),
         radius: Radius.circular(cornerRadius),
-        clockwise: dx.sign != dy.sign, // Lógica para a direção da curva
+        clockwise: dx.sign != dy.sign,
       );
 
-      // 3. Completa com a linha horizontal
       path.lineTo(end.dx, end.dy);
     }
 

@@ -3,13 +3,14 @@
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
-import 'package:musilingo/features/lesson/data/models/question_model.dart';
-import 'package:musilingo/features/lesson/data/models/drag_drop_question_model.dart';
-import 'package:musilingo/features/lesson/data/models/ear_training_question_model.dart';
-import 'package:musilingo/features/lesson/data/models/multiple_choice_question_model.dart'; // <-- IMPORT ADICIONADO
+import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/main.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:collection/collection.dart';
+import 'package:musilingo/app/services/user_session.dart';
+import 'package:provider/provider.dart';
+import 'package:confetti/confetti.dart';
 
 class LessonScreen extends StatefulWidget {
   final Lesson lesson;
@@ -21,44 +22,90 @@ class LessonScreen extends StatefulWidget {
 }
 
 class _LessonScreenState extends State<LessonScreen> {
-  late Future<List<Question>> _questionsFuture;
-  int _currentQuestionIndex = 0;
-  bool _isCorrect = false;
+  late Future<List<LessonStep>> _stepsFuture;
+  int _currentStepIndex = 0;
+  bool? _isCorrect;
   bool _showFeedback = false;
   final DatabaseService _databaseService = DatabaseService();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  late ConfettiController _confettiController;
+
+  List<String> _currentDragItems = [];
+  final List<String> _dropTargetItems = [];
+  bool _dragAndDropCorrect = false;
 
   @override
   void initState() {
     super.initState();
-    _questionsFuture = _databaseService.getQuestionsForLesson(widget.lesson.id);
+    _stepsFuture = _databaseService.getStepsForLesson(widget.lesson.id);
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 2));
   }
 
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
 
   void _onAnswerSubmitted(bool isCorrect) {
+    final userSession = Provider.of<UserSession>(context, listen: false);
+
+    if (isCorrect) {
+      userSession.answerCorrectly();
+    } else {
+      userSession.answerWrongly();
+      final livesLeft = userSession.currentUser?.lives ?? 0;
+      if (mounted) {
+        // Exibe o novo modal de vida perdida
+        _showLifeLostDialog(livesLeft);
+      }
+    }
+
     setState(() {
       _isCorrect = isCorrect;
       _showFeedback = true;
     });
   }
 
-  void _nextQuestion(int totalQuestions) async {
-    if (_currentQuestionIndex < totalQuestions - 1) {
+  void _resetStep() {
+    setState(() {
+      _showFeedback = false;
+      _isCorrect = null;
+      _stepsFuture.then((steps) {
+        if (steps.isNotEmpty && steps[_currentStepIndex] is DragAndDropStep) {
+          final step = steps[_currentStepIndex] as DragAndDropStep;
+          _dropTargetItems.clear();
+          _currentDragItems = List<String>.from(step.draggableItems)..shuffle();
+        }
+      });
+    });
+  }
+
+  void _nextStep(int totalSteps) async {
+    final userSession = context.read<UserSession>();
+    final user = userSession.currentUser;
+
+    if (_currentStepIndex < totalSteps - 1) {
       setState(() {
-        _currentQuestionIndex++;
+        _currentStepIndex++;
         _showFeedback = false;
+        _isCorrect = null;
+        _currentDragItems = [];
+        _dropTargetItems.clear();
+        _dragAndDropCorrect = false;
       });
     } else {
+      // Fim da lição
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
         await _databaseService.markLessonAsCompleted(userId, widget.lesson.id);
       }
       if (mounted) {
+        // Exibe o novo modal de lição completa
+        await _showLessonCompleteDialog(10, user?.lives ?? 0);
+        // ignore: use_build_context_synchronously
         Navigator.of(context).pop(true);
       }
     }
@@ -66,114 +113,258 @@ class _LessonScreenState extends State<LessonScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final userLives = context.watch<UserSession>().currentUser?.lives ?? 0;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.lesson.title),
         backgroundColor: AppColors.background,
         elevation: 0,
       ),
-      body: FutureBuilder<List<Question>>(
-        future: _questionsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError ||
-              !snapshot.hasData ||
-              snapshot.data!.isEmpty) {
-            return Center(
-                child: Text(
-                    'Erro: ${snapshot.error ?? "Não foi possível carregar as perguntas."}'));
-          }
+      // Stack permite sobrepor o widget de confete sobre a tela
+      body: Stack(
+        children: [
+          FutureBuilder<List<LessonStep>>(
+            future: _stepsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                    child: CircularProgressIndicator(color: AppColors.accent));
+              }
+              if (snapshot.hasError ||
+                  !snapshot.hasData ||
+                  snapshot.data!.isEmpty) {
+                return Center(
+                    child: Text(
+                        'Erro: ${snapshot.error ?? "Não foi possível carregar o conteúdo da lição."}'));
+              }
 
-          final questions = snapshot.data!;
-          final currentQuestion = questions[_currentQuestionIndex];
-          final progress = (_currentQuestionIndex + 1) / questions.length;
+              final steps = snapshot.data!;
+              final currentStep = steps[_currentStepIndex];
+              final progress = (_currentStepIndex + 1) / steps.length;
 
-          return Column(
-            children: [
-              LinearProgressIndicator(
-                value: progress,
-                backgroundColor: Colors.grey[300],
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppColors.completed),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: _buildQuestionWidget(currentQuestion),
-                ),
-              ),
-              if (_showFeedback)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: _isCorrect
-                      ? Colors.green.withAlpha(26)
-                      : Colors.red.withAlpha(26),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _isCorrect ? 'Correto!' : 'Tente novamente.',
-                        style: TextStyle(
-                          color: _isCorrect ? Colors.green : Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => _nextQuestion(questions.length),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              _isCorrect ? Colors.green : AppColors.primary,
-                        ),
-                        child: Text(_currentQuestionIndex < questions.length - 1
-                            ? 'Continuar'
-                            : 'Finalizar'),
-                      ),
-                    ],
+              if (currentStep is DragAndDropStep &&
+                  _currentDragItems.isEmpty &&
+                  _dropTargetItems.isEmpty) {
+                _currentDragItems =
+                    List<String>.from(currentStep.draggableItems)..shuffle();
+              }
+
+              if (userLives <= 0 && !_showFeedback) {
+                return _buildGameOverWidget();
+              }
+
+              return Column(
+                children: [
+                  LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: AppColors.card,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.completed),
                   ),
-                ),
-            ],
-          );
-        },
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _buildStepWidget(currentStep),
+                    ),
+                  ),
+                  if (_showFeedback) _buildFeedbackBar(steps.length),
+                ],
+              );
+            },
+          ),
+          // Widget de confete alinhado no topo para o efeito de explosão
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [
+                Colors.green,
+                Colors.blue,
+                Colors.pink,
+                Colors.orange,
+                Colors.purple
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // 3. ADICIONADO O 'case' PARA multipleChoice
-  Widget _buildQuestionWidget(Question question) {
-    switch (question.type) {
-      case QuestionType.multipleChoice:
-        return _buildMultipleChoiceQuestion(question as MultipleChoiceQuestion);
-      case QuestionType.dragAndDrop:
-        return _buildDragAndDropQuestion(question as DragAndDropQuestion);
-      case QuestionType.earTraining:
-        return _buildEarTrainingQuestion(question as EarTrainingQuestion);
+  // MODAIS
+  Future<void> _showLifeLostDialog(int livesLeft) {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.favorite_border, color: AppColors.primary, size: 28),
+            SizedBox(width: 12),
+            Text('Vida Perdida!', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Text(
+          'Você errou. Tenha mais cuidado! Vidas restantes: $livesLeft',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK', style: TextStyle(fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showLessonCompleteDialog(int pointsGained, int totalLives) {
+    _confettiController.play();
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Lição Concluída!',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: AppColors.accent, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star, color: AppColors.accent, size: 60),
+            const SizedBox(height: 16),
+            Text(
+              'Você ganhou +$pointsGained pontos!',
+              style: const TextStyle(fontSize: 18, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Vidas restantes: $totalLives',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.completed),
+              child: const Text('Continuar Jornada'),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  // WIDGETS DE CONSTRUÇÃO
+  Widget _buildGameOverWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.favorite_border, color: AppColors.primary, size: 80),
+          const SizedBox(height: 24),
+          const Text(
+            'Você não tem mais vidas!',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Pratique mais para recuperar vidas e tentar novamente.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Sair da Lição'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepWidget(LessonStep step) {
+    switch (step.type) {
+      case LessonStepType.explanation:
+        return _buildExplanationWidget(step as ExplanationStep);
+      case LessonStepType.multipleChoice:
+        return _buildMultipleChoiceWidget(step as MultipleChoiceQuestionStep);
+      case LessonStepType.dragAndDrop:
+        return _buildDragAndDropWidget(step as DragAndDropStep);
+      case LessonStepType.earTraining:
+        return _buildEarTrainingWidget(step as EarTrainingStep);
     }
   }
 
-  // 4. ADICIONADO O MÉTODO PARA CONSTRUIR A UI DA MÚLTIPLA ESCOLHA
-  Widget _buildMultipleChoiceQuestion(MultipleChoiceQuestion question) {
+  Widget _buildExplanationWidget(ExplanationStep step) {
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  step.text,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 22, height: 1.5),
+                ),
+                if (step.imageUrl != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0, bottom: 16.0),
+                    child: Image.network(step.imageUrl!),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            final steps = await _stepsFuture;
+            _nextStep(steps.length);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            minimumSize: const Size(double.infinity, 50),
+          ),
+          child: const Text('Continuar', style: TextStyle(fontSize: 18)),
+        )
+      ],
+    );
+  }
+
+  Widget _buildMultipleChoiceWidget(MultipleChoiceQuestionStep step) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          question.questionText,
+          step.questionText,
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 40),
-        ...question.options.map((option) {
+        ...step.options.map((option) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: ElevatedButton(
-              onPressed: () =>
-                  _onAnswerSubmitted(option == question.correctAnswer),
+              onPressed: _showFeedback
+                  ? null
+                  : () => _onAnswerSubmitted(option == step.correctAnswer),
               style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
                 minimumSize: const Size(double.infinity, 50),
               ),
-              child: Text(option),
+              child: Text(option, style: const TextStyle(fontSize: 18)),
             ),
           );
         }),
@@ -181,13 +372,170 @@ class _LessonScreenState extends State<LessonScreen> {
     );
   }
 
-  Widget _buildDragAndDropQuestion(DragAndDropQuestion question) {
-    // A sua lógica para a questão de arrastar e soltar irá aqui
-    return const Center(child: Text("Pergunta de Arrastar e Soltar"));
+  Widget _buildDragAndDropWidget(DragAndDropStep step) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          step.questionText,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        DragTarget<String>(
+          builder: (context, candidateData, rejectedData) {
+            return Container(
+              constraints: const BoxConstraints(minHeight: 60),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary)),
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Wrap(
+                  spacing: 8.0,
+                  runSpacing: 4.0,
+                  children: _dropTargetItems
+                      .map((item) => Chip(label: Text(item)))
+                      .toList(),
+                ),
+              ),
+            );
+          },
+          onAcceptWithDetails: (details) {
+            if (_showFeedback) return;
+            setState(() {
+              final data = details.data;
+              _dropTargetItems.add(data);
+              _currentDragItems.remove(data);
+              if (_currentDragItems.isEmpty) {
+                _dragAndDropCorrect = const ListEquality()
+                    .equals(_dropTargetItems, step.correctOrder);
+                _onAnswerSubmitted(_dragAndDropCorrect);
+              }
+            });
+          },
+        ),
+        Expanded(
+          child: Center(
+            child: Wrap(
+              spacing: 10.0,
+              runSpacing: 10.0,
+              alignment: WrapAlignment.center,
+              children: _currentDragItems.map((item) {
+                return Draggable<String>(
+                  data: item,
+                  feedback: Material(
+                    type: MaterialType.transparency,
+                    child: Chip(
+                        label: Text(item), backgroundColor: AppColors.accent),
+                  ),
+                  childWhenDragging:
+                      const Chip(label: Text(""), backgroundColor: Colors.grey),
+                  child: Chip(label: Text(item)),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
-  Widget _buildEarTrainingQuestion(EarTrainingQuestion question) {
-    // A sua lógica para a questão de treino auditivo irá aqui
-    return const Center(child: Text("Pergunta de Treino Auditivo"));
+  Widget _buildEarTrainingWidget(EarTrainingStep step) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          step.text,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 40),
+        IconButton(
+          icon: const Icon(Icons.play_circle_fill, color: AppColors.accent),
+          iconSize: 80,
+          onPressed: () async {
+            try {
+              await _audioPlayer.setUrl(
+                  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3');
+              _audioPlayer.play();
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Não foi possível carregar o áudio.')));
+              }
+            }
+          },
+        ),
+        const SizedBox(height: 40),
+        ...step.options.map((option) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: ElevatedButton(
+              onPressed: _showFeedback
+                  ? null
+                  : () => _onAnswerSubmitted(option == step.correctAnswer),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              child: Text(option, style: const TextStyle(fontSize: 18)),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildFeedbackBar(int totalSteps) {
+    final bool isCorrect = _isCorrect ?? false;
+    final userLives = context.watch<UserSession>().currentUser?.lives ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: isCorrect ? Colors.green.withAlpha(50) : Colors.red.withAlpha(50),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              isCorrect ? 'Correto!' : 'Ops! Tente novamente.',
+              style: TextStyle(
+                color: isCorrect ? Colors.green.shade200 : Colors.red.shade200,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          if (isCorrect)
+            ElevatedButton(
+              onPressed: () => _nextStep(totalSteps),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+              ),
+              child: Text(_currentStepIndex < totalSteps - 1
+                  ? 'Continuar'
+                  : 'Finalizar Lição'),
+            )
+          else if (userLives > 0)
+            ElevatedButton(
+              onPressed: _resetStep,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+              ),
+              child: const Text('Tentar Novamente'),
+            )
+          else
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              child: const Text('Sair da Lição'),
+            ),
+        ],
+      ),
+    );
   }
 }

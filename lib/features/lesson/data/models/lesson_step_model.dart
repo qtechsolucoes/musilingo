@@ -2,8 +2,9 @@
 
 enum LessonStepType {
   explanation,
-  earTraining,
+  multipleChoice,
   dragAndDrop,
+  earTraining,
 }
 
 abstract class LessonStep {
@@ -29,11 +30,12 @@ abstract class LessonStep {
     switch (type) {
       case LessonStepType.explanation:
         return ExplanationStep.fromMap(map);
-      case LessonStepType.earTraining:
-        return EarTrainingStep.fromMap(map);
+      case LessonStepType.multipleChoice:
+        return MultipleChoiceQuestionStep.fromMap(map);
       case LessonStepType.dragAndDrop:
         return DragAndDropStep.fromMap(map);
-      // A cláusula 'default' foi removida pois o switch já cobre todos os casos.
+      case LessonStepType.earTraining:
+        return EarTrainingStep.fromMap(map);
     }
   }
 }
@@ -55,37 +57,34 @@ class ExplanationStep extends LessonStep {
       id: map['id'],
       lessonId: map['lesson_id'],
       stepIndex: map['step_index'],
-      text: map['text'],
+      text: map['text'] ?? '',
       imageUrl: map['image_url'],
     );
   }
 }
 
-class EarTrainingStep extends LessonStep {
+class MultipleChoiceQuestionStep extends LessonStep {
   final String questionText;
-  final String audioUrl;
   final List<String> options;
   final String correctAnswer;
 
-  EarTrainingStep({
+  MultipleChoiceQuestionStep({
     required super.id,
     required super.lessonId,
     required super.stepIndex,
     required this.questionText,
-    required this.audioUrl,
     required this.options,
     required this.correctAnswer,
-  }) : super(type: LessonStepType.earTraining);
+  }) : super(type: LessonStepType.multipleChoice);
 
-  factory EarTrainingStep.fromMap(Map<String, dynamic> map) {
-    return EarTrainingStep(
+  factory MultipleChoiceQuestionStep.fromMap(Map<String, dynamic> map) {
+    return MultipleChoiceQuestionStep(
       id: map['id'],
       lessonId: map['lesson_id'],
       stepIndex: map['step_index'],
-      questionText: map['question_text'],
-      audioUrl: map['audio_url'],
-      options: List<String>.from(map['options']),
-      correctAnswer: map['correct_answer'],
+      questionText: map['question_text'] ?? '',
+      options: List<String>.from(map['options'] ?? []),
+      correctAnswer: map['correct_answer'] ?? '',
     );
   }
 }
@@ -109,9 +108,38 @@ class DragAndDropStep extends LessonStep {
       id: map['id'],
       lessonId: map['lesson_id'],
       stepIndex: map['step_index'],
-      questionText: map['question_text'],
-      draggableItems: List<String>.from(map['draggable_items']),
-      correctOrder: List<String>.from(map['correct_order']),
+      questionText: map['question_text'] ?? '',
+      draggableItems: List<String>.from(map['draggable_items'] ?? []),
+      correctOrder: List<String>.from(map['correct_order'] ?? []),
+    );
+  }
+}
+
+class EarTrainingStep extends LessonStep {
+  final String text;
+  final String audioUrl;
+  final List<String> options;
+  final String correctAnswer;
+
+  EarTrainingStep({
+    required super.id,
+    required super.lessonId,
+    required super.stepIndex,
+    required this.text,
+    required this.audioUrl,
+    required this.options,
+    required this.correctAnswer,
+  }) : super(type: LessonStepType.earTraining);
+
+  factory EarTrainingStep.fromMap(Map<String, dynamic> map) {
+    return EarTrainingStep(
+      id: map['id'],
+      lessonId: map['lesson_id'],
+      stepIndex: map['step_index'],
+      text: map['text'] ?? '',
+      audioUrl: map['audio_url'] ?? '',
+      options: List<String>.from(map['options'] ?? []),
+      correctAnswer: map['correct_answer'] ?? '',
     );
   }
 }
