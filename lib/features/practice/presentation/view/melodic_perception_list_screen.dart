@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
-import 'package:musilingo/app/data/models/melodic_exercise_model.dart'; // <-- CORREÇÃO: Caminho do import ajustado
+import 'package:musilingo/app/data/models/melodic_exercise_model.dart'; // CORREÇÃO: Caminho do import ajustado
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/features/practice/presentation/view/melodic_perception_exercise_screen.dart';
 

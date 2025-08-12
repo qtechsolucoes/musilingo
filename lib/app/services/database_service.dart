@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:musilingo/app/data/models/module_model.dart';
 import 'package:musilingo/app/data/models/user_profile_model.dart';
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
-import 'package:musilingo/features/lesson/data/models/melodic_exercise_model.dart';
+import 'package:musilingo/app/data/models/melodic_exercise_model.dart'; // CORREÇÃO: Caminho do import ajustado
 import 'package:musilingo/main.dart';
 
 class DatabaseService {
@@ -84,7 +84,7 @@ class DatabaseService {
   }
 
   // --- NOVO MÉTODO PARA O MODO PRÁTICA ---
-  Future<List> getMelodicExercises() async {
+  Future<List<MelodicExercise>> getMelodicExercises() async {
     final response = await supabase
         .from('practice_melodies')
         .select('*')

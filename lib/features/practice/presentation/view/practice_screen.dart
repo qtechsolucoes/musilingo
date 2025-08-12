@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
+import 'package:musilingo/features/practice/presentation/view/melodic_perception_list_screen.dart';
 
 class PracticeScreen extends StatelessWidget {
   const PracticeScreen({super.key});
@@ -35,7 +36,9 @@ class PracticeScreen extends StatelessWidget {
             subtitle: 'Ouça e transcreva pequenas melodias.',
             isEnabled: true, // Habilitado para implementação
             onTap: () {
-              // Navegar para a tela de Percepção Melódica (próximo passo)
+              // CORREÇÃO: A navegação agora está implementada
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const MelodicPerceptionListScreen()));
             },
           ),
           const SizedBox(height: 16),

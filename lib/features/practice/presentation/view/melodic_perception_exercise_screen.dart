@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:collection/collection.dart';
 
 // Representa uma nota colocada pelo usuário na pauta
 class UserNote {
@@ -28,31 +27,51 @@ class MelodicPerceptionExerciseScreen extends StatefulWidget {
 class _MelodicPerceptionExerciseScreenState
     extends State<MelodicPerceptionExerciseScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _metronomePlayer = AudioPlayer();
 
   // Gerencia o estado do exercício
   String? _selectedFigure;
   final List<UserNote> _userSequence = [];
   bool _isVerified = false;
+  bool _isMetronomePlaying = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showReferenceNoteDialog();
+      _setupMetronome();
     });
   }
 
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _metronomePlayer.dispose();
     super.dispose();
+  }
+
+  void _setupMetronome() async {
+    // Carrega um som de metronomo simples
+    await _metronomePlayer.setAsset('assets/audio/metronome_click.mp3');
+    _metronomePlayer.setLoopMode(LoopMode.one);
+  }
+
+  void _toggleMetronome() {
+    if (_isMetronomePlaying) {
+      _metronomePlayer.pause();
+    } else {
+      _metronomePlayer.play();
+    }
+    setState(() {
+      _isMetronomePlaying = !_isMetronomePlaying;
+    });
   }
 
   Future<void> _playAudio(String url) async {
     try {
-      // TODO: Substituir por URLs reais do Supabase Storage
-      await _audioPlayer.setUrl(
-          'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3');
+      // Usa a URL do exercício, mas com um placeholder por enquanto.
+      await _audioPlayer.setUrl(url);
       _audioPlayer.play();
     } catch (e) {
       if (mounted) {
@@ -69,8 +88,6 @@ class _MelodicPerceptionExerciseScreenState
       final correctSequence = widget.exercise.correctSequence;
       for (int i = 0; i < _userSequence.length; i++) {
         if (i < correctSequence.length) {
-          // Lógica de verificação simples (pode ser aprimorada)
-          // Aqui, estamos apenas verificando a figura, não a altura.
           final userNoteString = _userSequence[i].figure;
           final correctNoteString = correctSequence[i].split('_').last;
           _userSequence[i].isCorrect = (userNoteString == correctNoteString);
@@ -109,6 +126,7 @@ class _MelodicPerceptionExerciseScreenState
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () {
+              // TODO: Conectar ao áudio real da nota de referência
               _playAudio(widget.exercise.referenceNoteAudioUrl);
               Navigator.of(context).pop();
             },
