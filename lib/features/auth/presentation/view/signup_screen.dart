@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/main.dart';
+import 'package:musilingo/shared/widgets/custom_text_field.dart'; // IMPORT ADICIONADO
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -15,14 +16,11 @@ class _SignupScreenState extends State<SignupScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
   bool _isLoading = false;
 
   Future<void> _signUp() async {
-    // --- CORREÇÃO INÍCIO ---
     final navigator = Navigator.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    // --- CORREÇÃO FIM ---
 
     if (!mounted) return;
 
@@ -37,7 +35,6 @@ class _SignupScreenState extends State<SignupScreen> {
         data: {'full_name': _nameController.text.trim()},
       );
 
-      // --- CORREÇÃO INÍCIO ---
       scaffoldMessenger.showSnackBar(
         const SnackBar(
           content: Text('Sucesso! Verifique seu e-mail para confirmação.'),
@@ -45,16 +42,13 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
       );
       navigator.pop();
-      // --- CORREÇÃO FIM ---
     } catch (error) {
-      // --- CORREÇÃO INÍCIO ---
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('Erro no cadastro: ${error.toString()}'),
           backgroundColor: AppColors.primary,
         ),
       );
-      // --- CORREÇÃO FIM ---
     } finally {
       if (mounted) {
         setState(() {
@@ -96,58 +90,29 @@ class _SignupScreenState extends State<SignupScreen> {
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 48),
-                TextField(
+
+                // CÓDIGO REFATORADO AQUI
+                CustomTextField(
                   controller: _nameController,
-                  style: const TextStyle(color: AppColors.text),
-                  decoration: InputDecoration(
-                    labelText: 'Nome',
-                    labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.person_outline,
-                        color: AppColors.accent),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.white24)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.accent)),
-                  ),
+                  labelText: 'Nome',
+                  prefixIcon: Icons.person_outline,
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                CustomTextField(
                   controller: _emailController,
+                  labelText: 'E-mail',
+                  prefixIcon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: AppColors.text),
-                  decoration: InputDecoration(
-                    labelText: 'E-mail',
-                    labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon: const Icon(Icons.email_outlined,
-                        color: AppColors.accent),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.white24)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.accent)),
-                  ),
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                CustomTextField(
                   controller: _passwordController,
+                  labelText: 'Senha',
+                  prefixIcon: Icons.lock_outline,
                   obscureText: true,
-                  style: const TextStyle(color: AppColors.text),
-                  decoration: InputDecoration(
-                    labelText: 'Senha',
-                    labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    prefixIcon:
-                        const Icon(Icons.lock_outline, color: AppColors.accent),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.white24)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.accent)),
-                  ),
                 ),
+                // FIM DA REFATORAÇÃO
+
                 const SizedBox(height: 32),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _signUp,

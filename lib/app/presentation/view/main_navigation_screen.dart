@@ -18,14 +18,8 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // --- CORREÇÃO: A chamada não precisa de nenhum argumento ---
-      Provider.of<UserSession>(context, listen: false).loadUserProfile();
-    });
-  }
+  // O MÉTODO initState() FOI COMPLETAMENTE REMOVIDO DESTA CLASSE.
+  // A tela agora assume que o UserSession já está carregado quando ela é exibida.
 
   static const List<Widget> _widgetOptions = <Widget>[
     HomeScreen(),
@@ -43,6 +37,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     final userSession = context.watch<UserSession>();
 
+    // Esta lógica de carregamento e erro é mantida como uma salvaguarda,
+    // mas idealmente não será mais acionada no fluxo normal, pois a SplashScreen
+    // já garante que os dados estejam prontos.
     if (userSession.isLoading) {
       return const Scaffold(
         body: Center(

@@ -10,8 +10,14 @@ class AppColors {
   static const Color accent = Color(0xFFf0c419);
 
   // --- CORES ANTIGAS ADICIONADAS DE VOLTA ---
-  // (Para compatibilidade com o resto do app)
   static const Color text = Colors.white;
   static const Color textSecondary = Color(0xFFaeb2b7);
   static const Color card = Color(0xFF1c1c3c);
+
+  // --- CORES NOVAS PARA FEEDBACK ---
+  static const Color error = Color(0xFFD32F2F); // Vermelho para erros e modais
+
+  // Cores em formato String (Hex) para usar no JavaScript do WebView
+  static const String completedHex = '#4CAF50'; // Verde para notas corretas
+  static const String errorHex = '#F44336'; // Vermelho para notas incorretas
 }

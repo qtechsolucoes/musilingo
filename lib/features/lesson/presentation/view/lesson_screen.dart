@@ -454,10 +454,19 @@ class _LessonScreenState extends State<LessonScreen> {
           icon: const Icon(Icons.play_circle_fill, color: AppColors.accent),
           iconSize: 80,
           onPressed: () async {
+            // Verifica se a URL não está vazia antes de tentar tocar
+            if (step.audioUrl.isEmpty) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content:
+                        Text('Áudio para este exercício não encontrado.')));
+              }
+              return;
+            }
+
             try {
-              // URL de áudio de exemplo, substitua pela URL real do seu Supabase Storage
               await _audioPlayer.setUrl(
-                  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3');
+                  step.audioUrl); // <--- CORRETO: Usa a URL do exercício
               _audioPlayer.play();
             } catch (e) {
               if (mounted) {

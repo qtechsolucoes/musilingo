@@ -2,9 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
-import 'package:musilingo/app/data/models/melodic_exercise_model.dart'; // CORREÇÃO: Caminho do import ajustado
+import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/features/practice/presentation/view/melodic_perception_exercise_screen.dart';
+import 'package:musilingo/features/practice/presentation/widgets/exercise_node_widget.dart'; // Importa o novo widget
 
 class MelodicPerceptionListScreen extends StatefulWidget {
   const MelodicPerceptionListScreen({super.key});
@@ -53,32 +54,81 @@ class _MelodicPerceptionListScreenState
           }
 
           final exercises = snapshot.data!;
+          const double nodeSpacing = 120.0;
+          final double totalHeight = exercises.length * nodeSpacing;
 
-          return ListView.builder(
-            itemCount: exercises.length,
-            itemBuilder: (context, index) {
-              final exercise = exercises[index];
-              return Card(
-                color: AppColors.card,
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ListTile(
-                  leading:
-                      const Icon(Icons.music_note, color: AppColors.accent),
-                  title: Text(exercise.title),
-                  subtitle: Text('Dificuldade: ${exercise.difficulty}'),
-                  trailing: const Icon(Icons.play_arrow),
-                  onTap: () {
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (context) =>
-                          MelodicPerceptionExerciseScreen(exercise: exercise),
-                    ));
-                  },
-                ),
-              );
-            },
+          return SingleChildScrollView(
+            child: SizedBox(
+              width: double.infinity,
+              height: totalHeight,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Pinta o caminho da trilha
+                  _buildPracticePath(exercises.length, nodeSpacing),
+                  // Posiciona os nós dos exercícios
+                  ..._buildExerciseNodes(exercises, nodeSpacing),
+                ],
+              ),
+            ),
           );
         },
       ),
     );
   }
+
+  List<Widget> _buildExerciseNodes(
+      List<MelodicExercise> exercises, double spacing) {
+    return List.generate(exercises.length, (index) {
+      final exercise = exercises[index];
+      return Positioned(
+        top: index * spacing + 20, // Adiciona um padding inicial
+        child: ExerciseNodeWidget(
+          exercise: exercise,
+          onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (context) =>
+                  MelodicPerceptionExerciseScreen(exercise: exercise),
+            ));
+          },
+        ),
+      );
+    });
+  }
+
+  Widget _buildPracticePath(int count, double spacing) {
+    return CustomPaint(
+      size: Size.infinite,
+      painter: _PracticePathPainter(nodeCount: count, spacing: spacing),
+    );
+  }
+}
+
+// Um CustomPainter simples para desenhar a linha vertical da trilha
+class _PracticePathPainter extends CustomPainter {
+  final int nodeCount;
+  final double spacing;
+
+  _PracticePathPainter({required this.nodeCount, required this.spacing});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      // ignore: deprecated_member_use
+      ..color = AppColors.primary.withOpacity(0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8.0
+      ..strokeCap = StrokeCap.round;
+
+    if (nodeCount <= 1) return;
+
+    final startY = (spacing / 2) + 20;
+    final endY = (nodeCount - 1) * spacing + (spacing / 2);
+    final centerX = size.width / 2;
+
+    canvas.drawLine(Offset(centerX, startY), Offset(centerX, endY), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

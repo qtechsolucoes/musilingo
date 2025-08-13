@@ -28,10 +28,7 @@ dependencies:
   confetti: ^0.7.0
   just_audio: ^0.10.4
   webview_flutter: ^4.8.0
-
-  # --- GARANTA QUE ESTA LINHA ESTEJA PRESENTE ---
-  flutter_soloud: ^1.2.0
-  # --- E QUE A LINHA flutter_midi FOI REMOVIDA ---
+  flutter_midi_pro: ^3.1.4
 
 dev_dependencies:
   flutter_test:

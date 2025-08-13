@@ -1,16 +1,18 @@
 // lib/features/practice/presentation/view/melodic_perception_exercise_screen.dart
 
 import 'dart:async';
-import 'dart:math';
+import 'package:collection/collection.dart'; // IMPORT NECESSÁRIO PARA COMPARAR LISTAS
+import 'package:confetti/confetti.dart'; // IMPORT NECESSÁRIO PARA OS CONFETES
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-// --- A CORREÇÃO CRUCIAL ESTÁ AQUI ---
-import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
+import 'package:musilingo/app/services/user_session.dart'; // IMPORT NECESSÁRIO
+import 'package:musilingo/features/practice/presentation/widgets/melodic_input_panel.dart';
+import 'package:provider/provider.dart'; // IMPORT NECESSÁRIO
 import 'package:webview_flutter/webview_flutter.dart';
 
-// (As classes MusicUtils e UserNote permanecem as mesmas)
 class MusicUtils {
   static const Map<String, int> _noteValues = {
     'C': 0,
@@ -52,16 +54,6 @@ class MusicUtils {
     '32nd': 0.125,
     '64th': 0.0625
   };
-  static double midiToHz(int midiNote) {
-    return 440.0 * pow(2.0, (midiNote - 69.0) / 12.0);
-  }
-}
-
-class UserNote {
-  final String figure;
-  final int staffPosition;
-  bool? isCorrect;
-  UserNote({required this.figure, required this.staffPosition, this.isCorrect});
 }
 
 class MelodicPerceptionExerciseScreen extends StatefulWidget {
@@ -76,38 +68,40 @@ class MelodicPerceptionExerciseScreen extends StatefulWidget {
 class _MelodicPerceptionExerciseScreenState
     extends State<MelodicPerceptionExerciseScreen> {
   late final WebViewController _controller;
-  final SoLoud _soLoud = SoLoud.instance;
-  SoundFont? _soundFont;
+  final _midiPro = MidiPro();
+  int? _soundfontId;
+  late ConfettiController
+      _confettiController; // Adicionado para o modal de sucesso
 
   bool _isWebViewReady = false;
   bool _isSoundfontReady = false;
 
   List<String> _userSequence = [];
   bool _isVerified = false;
-  final List<String> _notePalette = [
-    "C4",
-    "D4",
-    "E4",
-    "F4",
-    "G4",
-    "A4",
-    "B4",
-    "C5"
-  ];
 
-  final Map<String, String> _figurePalette = {
+  static const Map<String, String> _allFigureNames = {
     'whole': 'Semibreve (𝅝)',
     'half': 'Mínima (𝅗𝅥)',
     'quarter': 'Semínima (♩)',
     'eighth': 'Colcheia (♪)',
     '16th': 'Semicolcheia (♬)',
   };
-  String _selectedNote = "C4";
-  String _selectedFigure = "quarter";
+
+  late String _selectedNote;
+  late String _selectedFigure;
 
   @override
   void initState() {
     super.initState();
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 1));
+    _selectedNote = widget.exercise.notePalette.isNotEmpty
+        ? widget.exercise.notePalette.first
+        : 'C4';
+    _selectedFigure = widget.exercise.figurePalette.isNotEmpty
+        ? widget.exercise.figurePalette.first
+        : 'quarter';
+
     _initializeScreen();
   }
 
@@ -116,9 +110,7 @@ class _MelodicPerceptionExerciseScreenState
       DeviceOrientation.landscapeRight,
       DeviceOrientation.landscapeLeft,
     ]);
-
-    _initializeAudio();
-
+    await _initializeAudio();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(AppColors.background)
@@ -129,7 +121,7 @@ class _MelodicPerceptionExerciseScreenState
               setState(() {
                 _isWebViewReady = true;
               });
-              _renderBlankStaff();
+              _renderUserSequence();
             }
           },
         ),
@@ -139,16 +131,19 @@ class _MelodicPerceptionExerciseScreenState
 
   Future<void> _initializeAudio() async {
     try {
-      await _soLoud.init();
-      final sf = await _soLoud.loadAsset('assets/sf2/GeneralUserGS.sf2');
+      final sfId = await _midiPro.loadSoundfont(
+        path: 'assets/sf2/GeneralUserGS.sf2',
+        bank: 0,
+        program: 0,
+      );
       if (mounted) {
         setState(() {
-          _soundFont = sf;
+          _soundfontId = sfId;
           _isSoundfontReady = true;
         });
       }
     } catch (e) {
-      debugPrint("Erro ao inicializar o áudio com SoLoud: $e");
+      debugPrint("Erro ao inicializar o áudio com MidiPro: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -160,7 +155,7 @@ class _MelodicPerceptionExerciseScreenState
 
   @override
   void dispose() {
-    _soLoud.deinit();
+    _confettiController.dispose();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -171,10 +166,10 @@ class _MelodicPerceptionExerciseScreenState
   }
 
   Future<void> _playExerciseMelody() async {
-    if (!_isSoundfontReady || _soundFont == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Instrumentos ainda não estão prontos.'),
-      ));
+    if (!_isSoundfontReady || _soundfontId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Instrumentos ainda não estão prontos.')),
+      );
       return;
     }
     const double bpm = 100.0;
@@ -184,26 +179,31 @@ class _MelodicPerceptionExerciseScreenState
       final parts = noteData.split('_');
       final noteName = parts[0];
       final durationName = parts[1];
-
       final midiNote = MusicUtils.noteNameToMidi(noteName);
-      final frequency = MusicUtils.midiToHz(midiNote);
       final durationMultiplier =
           MusicUtils.figureDurations[durationName] ?? 1.0;
       final noteDuration = (quarterNoteDurationMs * durationMultiplier).round();
-
-      _soLoud.playSfx(_soundFont!, pitch: frequency, volume: 1.0);
+      _midiPro.playNote(
+        sfId: _soundfontId!,
+        channel: 0,
+        key: midiNote,
+        velocity: 127,
+      );
       await Future.delayed(Duration(milliseconds: noteDuration));
+      _midiPro.stopNote(
+        sfId: _soundfontId!,
+        channel: 0,
+        key: midiNote,
+      );
     }
   }
 
   void _addNoteToSequence() {
     if (_isVerified) return;
-
     final timeSignatureParts = widget.exercise.timeSignature.split('/');
     final beatsPerMeasure = int.parse(timeSignatureParts[0]);
     final beatType = int.parse(timeSignatureParts[1]);
     final measureCapacity = beatsPerMeasure * (4.0 / beatType);
-
     double currentMeasureDuration = 0;
     for (var noteData in _userSequence) {
       final duration = MusicUtils.figureDurations[noteData.split('_')[1]] ?? 0;
@@ -212,16 +212,16 @@ class _MelodicPerceptionExerciseScreenState
         currentMeasureDuration -= measureCapacity;
       }
     }
-
     final newNoteDuration = MusicUtils.figureDurations[_selectedFigure] ?? 0;
     if (currentMeasureDuration + newNoteDuration > measureCapacity) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('A figura não cabe neste compasso!'),
-        backgroundColor: Colors.redAccent,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A figura não cabe neste compasso!'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
       return;
     }
-
     setState(() {
       _userSequence.add("${_selectedNote}_$_selectedFigure");
     });
@@ -236,27 +236,21 @@ class _MelodicPerceptionExerciseScreenState
     _renderUserSequence();
   }
 
-  void _renderUserSequence(
-      {String Function(String note, bool isCorrect)? colorizer}) {
+  void _renderUserSequence({
+    String Function(String note, bool isCorrect)? colorizer,
+  }) {
+    if (!_isWebViewReady) return;
     final timeSignature = widget.exercise.timeSignature;
     final beatsPerMeasure = int.parse(timeSignature.split('/')[0]);
     final beatType = int.parse(timeSignature.split('/')[1]);
-    final measureCapacity = beatsPerMeasure * (4.0 / beatType);
-
     StringBuffer measuresXml = StringBuffer();
-    double currentMeasureDuration = 0;
-    int measureNumber = 1;
-
-    measuresXml.write('<measure number="$measureNumber">');
-    if (measureNumber == 1) {
-      measuresXml.write(
-          '<attributes><divisions>4</divisions><key><fifths>0</fifths></key>');
-      measuresXml.write(
-          '<time><beats>$beatsPerMeasure</beats><beat-type>$beatType</beat-type></time>');
-      measuresXml.write(
-          '<clef><sign>${widget.exercise.clef == 'treble' ? 'G' : 'F'}</sign><line>${widget.exercise.clef == 'treble' ? '2' : '4'}</line></clef></attributes>');
-    }
-
+    measuresXml.write('<measure number="1">');
+    measuresXml.write('<attributes>'
+        '<divisions>1</divisions>'
+        '<key><fifths>0</fifths></key>'
+        '<time><beats>$beatsPerMeasure</beats><beat-type>$beatType</beat-type></time>'
+        '<clef><sign>${widget.exercise.clef == 'treble' ? 'G' : 'F'}</sign><line>${widget.exercise.clef == 'treble' ? '2' : '4'}</line></clef>'
+        '</attributes>');
     for (var entry in _userSequence.asMap().entries) {
       final index = entry.key;
       final noteData = entry.value.split('_');
@@ -264,37 +258,21 @@ class _MelodicPerceptionExerciseScreenState
       final figure = noteData[1];
       final step = noteName[0];
       final octave = noteName.substring(1);
-      final noteDuration = MusicUtils.figureDurations[figure] ?? 0;
-
       String colorTag = "";
       if (colorizer != null) {
         final isCorrect = index < widget.exercise.correctSequence.length &&
             widget.exercise.correctSequence[index] == entry.value;
         colorTag = colorizer(entry.value, isCorrect);
       }
-
-      final xmlDuration = (noteDuration * 4).toInt();
-
+      final type = figure;
       measuresXml.write("""
       <note $colorTag>
         <pitch><step>$step</step><octave>$octave</octave></pitch>
-        <duration>$xmlDuration</duration><type>$figure</type>
+        <duration>1</duration><type>$type</type>
       </note>
       """);
-
-      currentMeasureDuration += noteDuration;
-      if (currentMeasureDuration >= measureCapacity) {
-        measuresXml.write('</measure>');
-        measureNumber++;
-        measuresXml.write('<measure number="$measureNumber">');
-        currentMeasureDuration = 0;
-      }
     }
-
-    if (!measuresXml.toString().endsWith('</measure>')) {
-      measuresXml.write('</measure>');
-    }
-
+    measuresXml.write('</measure>');
     final fullXml = """
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
@@ -306,17 +284,31 @@ class _MelodicPerceptionExerciseScreenState
     _loadScoreIntoWebView(fullXml);
   }
 
-  void _renderBlankStaff() {
-    _loadScoreIntoWebView(widget.exercise.musicXml);
-  }
-
   void _verifyAnswer() {
     setState(() {
       _isVerified = true;
     });
-    _renderUserSequence(colorizer: (note, isCorrect) {
-      return 'color="${isCorrect ? '#4CAF50' : '#F44336'}"';
-    });
+
+    // Lógica de verificação
+    final bool isCorrect = const ListEquality()
+        .equals(_userSequence, widget.exercise.correctSequence);
+    final userSession = context.read<UserSession>();
+
+    // Aplica as cores na pauta
+    _renderUserSequence(
+      colorizer: (note, isCorrect) {
+        return 'color="${isCorrect ? AppColors.completedHex : AppColors.errorHex}"';
+      },
+    );
+
+    // Mostra o modal apropriado
+    if (isCorrect) {
+      userSession.answerCorrectly();
+      _showSuccessDialog();
+    } else {
+      userSession.answerWrongly();
+      _showErrorDialog();
+    }
   }
 
   void _loadScoreIntoWebView(String musicXml) {
@@ -330,26 +322,119 @@ class _MelodicPerceptionExerciseScreenState
     }
   }
 
+  // NOVO MÉTODO DE DIÁLOGO DE SUCESSO
+  Future<void> _showSuccessDialog() {
+    _confettiController.play();
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Excelente!',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: AppColors.accent, fontWeight: FontWeight.bold)),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star, color: AppColors.accent, size: 60),
+            SizedBox(height: 16),
+            Text(
+              'Você transcreveu a melodia perfeitamente!',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, color: Colors.white),
+            ),
+            SizedBox(height: 8),
+            Text(
+              '+10 pontos!',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppColors.completed),
+            child: const Text('Continuar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // NOVO MÉTODO DE DIÁLOGO DE ERRO
+  Future<void> _showErrorDialog() {
+    final livesLeft = context.read<UserSession>().currentUser?.lives ?? 0;
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.sentiment_dissatisfied,
+                color: AppColors.error, size: 28),
+            SizedBox(width: 12),
+            Text('Quase lá!', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Text(
+          'A sequência não está correta. Compare as notas verdes e vermelhas.\nVidas restantes: $livesLeft',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              setState(() {
+                _userSequence = [];
+                _isVerified = false;
+                _selectedNote = widget.exercise.notePalette.isNotEmpty
+                    ? widget.exercise.notePalette.first
+                    : 'C4';
+                _selectedFigure = widget.exercise.figurePalette.isNotEmpty
+                    ? widget.exercise.figurePalette.first
+                    : 'quarter';
+              });
+              _renderUserSequence();
+            },
+            child: const Text('Tentar Novamente'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isWebViewReady || !_isSoundfontReady) {
       return Scaffold(
-          appBar: AppBar(
-            title: Text(widget.exercise.title),
-            backgroundColor: AppColors.background,
-          ),
-          body: Center(
-              child: Column(
+        appBar: AppBar(
+          title: Text(widget.exercise.title),
+          backgroundColor: AppColors.background,
+        ),
+        body: const Center(
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const CircularProgressIndicator(color: AppColors.accent),
-              const SizedBox(height: 16),
-              Text(!_isSoundfontReady
-                  ? "Preparando instrumentos..."
-                  : "Carregando pauta..."),
+              CircularProgressIndicator(color: AppColors.accent),
+              SizedBox(height: 16),
+              Text("Carregando exercício..."),
             ],
-          )));
+          ),
+        ),
+      );
     }
+
+    final figurePaletteForExercise = {
+      for (var key in widget.exercise.figurePalette)
+        if (_allFigureNames.containsKey(key)) key: _allFigureNames[key]!
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -359,7 +444,7 @@ class _MelodicPerceptionExerciseScreenState
           IconButton(
             icon: const Icon(Icons.hearing),
             tooltip: "Ouvir a melodia",
-            onPressed: _playExerciseMelody,
+            onPressed: _isVerified ? null : _playExerciseMelody,
           ),
           if (_isVerified)
             IconButton(
@@ -369,140 +454,78 @@ class _MelodicPerceptionExerciseScreenState
                 setState(() {
                   _userSequence = [];
                   _isVerified = false;
+                  _selectedNote = widget.exercise.notePalette.isNotEmpty
+                      ? widget.exercise.notePalette.first
+                      : 'C4';
+                  _selectedFigure = widget.exercise.figurePalette.isNotEmpty
+                      ? widget.exercise.figurePalette.first
+                      : 'quarter';
                 });
-                _renderBlankStaff();
+                _renderUserSequence();
               },
             ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          children: [
-            Expanded(
-              flex: 5,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary.withAlpha(100)),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: WebViewWidget(controller: _controller),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 120,
-              padding:
-                  const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: _notePalette
-                                  .map((note) => Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 4.0),
-                                        child: ActionChip(
-                                          label: Text(note),
-                                          backgroundColor: _selectedNote == note
-                                              ? AppColors.accent
-                                              : AppColors.primary,
-                                          onPressed: () => setState(
-                                              () => _selectedNote = note),
-                                        ),
-                                      ))
-                                  .toList(),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: _figurePalette.entries
-                                  .map((entry) => Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 4.0),
-                                        child: ActionChip(
-                                          label: Text(entry.value),
-                                          backgroundColor:
-                                              _selectedFigure == entry.key
-                                                  ? AppColors.accent
-                                                  : AppColors.primary,
-                                          onPressed: () => setState(() =>
-                                              _selectedFigure = entry.key),
-                                        ),
-                                      ))
-                                  .toList(),
-                            ),
-                          ),
-                        ),
-                      ],
+      // Adiciona um Stack para o efeito de confete
+      body: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: AppColors.primary.withAlpha(100)),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: WebViewWidget(controller: _controller),
                     ),
                   ),
-                  const VerticalDivider(
-                      width: 24,
-                      indent: 8,
-                      endIndent: 8,
-                      color: Colors.white24),
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: _addNoteToSequence,
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text("Nota"),
-                              style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12)),
-                            ),
-                            ElevatedButton.icon(
-                              onPressed: _removeLastNote,
-                              icon: const Icon(Icons.undo, size: 18),
-                              label: const Text("Desfazer"),
-                              style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12)),
-                            ),
-                          ],
-                        ),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isVerified ? null : _verifyAnswer,
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.completed),
-                            child: const Text('Verificar Resposta'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 8),
+                MelodicInputPanel(
+                  notePalette: widget.exercise.notePalette,
+                  figurePalette: figurePaletteForExercise,
+                  selectedNote: _selectedNote,
+                  selectedFigure: _selectedFigure,
+                  isVerified: _isVerified,
+                  onNoteSelected: (note) =>
+                      setState(() => _selectedNote = note),
+                  onFigureSelected: (figure) =>
+                      setState(() => _selectedFigure = figure),
+                  onAddNote: _addNoteToSequence,
+                  onRemoveLastNote: _removeLastNote,
+                  onVerify: _verifyAnswer,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          ConfettiWidget(
+            confettiController: _confettiController,
+            blastDirectionality: BlastDirectionality.explosive,
+            shouldLoop: false,
+            colors: const [
+              Colors.green,
+              Colors.blue,
+              Colors.pink,
+              Colors.orange,
+              Colors.purple
+            ],
+          ),
+        ],
       ),
     );
   }
 }
+
+// Pequena adição no seu arquivo de cores para os modais
+// Adicione em lib/app/core/theme/app_colors.dart
+// static const Color error = Color(0xFFD32F2F);
+// static const String completedHex = '#4CAF50'; // Usado no JS
+// static const String errorHex = '#F44336'; // Usado no JS
