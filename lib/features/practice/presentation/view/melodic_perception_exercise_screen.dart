@@ -1,16 +1,17 @@
 // lib/features/practice/presentation/view/melodic_perception_exercise_screen.dart
 
 import 'dart:async';
-import 'package:collection/collection.dart'; // IMPORT NECESSÁRIO PARA COMPARAR LISTAS
-import 'package:confetti/confetti.dart'; // IMPORT NECESSÁRIO PARA OS CONFETES
+import 'dart:math';
+import 'package:collection/collection.dart';
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
-import 'package:musilingo/app/services/user_session.dart'; // IMPORT NECESSÁRIO
+import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/practice/presentation/widgets/melodic_input_panel.dart';
-import 'package:provider/provider.dart'; // IMPORT NECESSÁRIO
+import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 class MusicUtils {
@@ -69,15 +70,19 @@ class _MelodicPerceptionExerciseScreenState
     extends State<MelodicPerceptionExerciseScreen> {
   late final WebViewController _controller;
   final _midiPro = MidiPro();
-  int? _soundfontId;
-  late ConfettiController
-      _confettiController; // Adicionado para o modal de sucesso
+  int? _instrumentSoundfontId;
+  int? _percussionSoundfontId;
+  late ConfettiController _confettiController;
 
   bool _isWebViewReady = false;
   bool _isSoundfontReady = false;
 
   List<String> _userSequence = [];
   bool _isVerified = false;
+
+  bool _isMetronomeEnabled = false;
+  final ValueNotifier<int> _beatCountNotifier = ValueNotifier(0);
+  Timer? _playbackTimer;
 
   static const Map<String, String> _allFigureNames = {
     'whole': 'Semibreve (𝅝)',
@@ -131,31 +136,33 @@ class _MelodicPerceptionExerciseScreenState
 
   Future<void> _initializeAudio() async {
     try {
-      final sfId = await _midiPro.loadSoundfont(
+      final sfInstrument = await _midiPro.loadSoundfont(
         path: 'assets/sf2/GeneralUserGS.sf2',
+        bank: 0,
+        program: 0,
+      );
+      final sfPercussion = await _midiPro.loadSoundfont(
+        path: 'assets/sf2/Standard_Drum_Kit.sf2',
         bank: 0,
         program: 0,
       );
       if (mounted) {
         setState(() {
-          _soundfontId = sfId;
+          _instrumentSoundfontId = sfInstrument;
+          _percussionSoundfontId = sfPercussion;
           _isSoundfontReady = true;
         });
       }
     } catch (e) {
       debugPrint("Erro ao inicializar o áudio com MidiPro: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Erro fatal ao carregar sons: ${e.toString()}')),
-        );
-      }
     }
   }
 
   @override
   void dispose() {
     _confettiController.dispose();
+    _beatCountNotifier.dispose();
+    _playbackTimer?.cancel();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -166,15 +173,53 @@ class _MelodicPerceptionExerciseScreenState
   }
 
   Future<void> _playExerciseMelody() async {
-    if (!_isSoundfontReady || _soundfontId == null) {
+    if (!_isSoundfontReady ||
+        _instrumentSoundfontId == null ||
+        _percussionSoundfontId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Instrumentos ainda não estão prontos.')),
       );
       return;
     }
-    const double bpm = 100.0;
-    const double quarterNoteDurationMs = 60000.0 / bpm;
 
+    _playbackTimer?.cancel();
+
+    final int bpm = widget.exercise.tempo;
+    final double beatDurationMs = 60000.0 / bpm;
+    const int metronomeMidiNote = 37;
+    const int percussionChannel = 9;
+
+    Map<int, List<Function>> events = {};
+    int totalDurationMs = 0;
+    final timeSignatureParts = widget.exercise.timeSignature.split('/');
+    final beatsPerMeasure = int.parse(timeSignatureParts[0]);
+
+    double melodyDuration = 0;
+    for (String noteData in widget.exercise.correctSequence) {
+      final durationName = noteData.split('_')[1];
+      final durationMultiplier =
+          MusicUtils.figureDurations[durationName] ?? 1.0;
+      melodyDuration += beatDurationMs * durationMultiplier;
+    }
+    final totalBeats =
+        (melodyDuration / beatDurationMs).ceil() + beatsPerMeasure;
+
+    if (_isMetronomeEnabled) {
+      for (int i = 0; i < totalBeats; i++) {
+        final time = (i * beatDurationMs).round();
+        events.putIfAbsent(time, () => []).add(() {
+          _beatCountNotifier.value = (i % beatsPerMeasure) + 1;
+          _midiPro.playNote(
+              sfId: _percussionSoundfontId!,
+              channel: percussionChannel,
+              key: metronomeMidiNote,
+              velocity: (i % beatsPerMeasure) == 0 ? 127 : 100);
+        });
+      }
+    }
+
+    double currentTimeMs =
+        _isMetronomeEnabled ? (beatsPerMeasure * beatDurationMs) : 0;
     for (String noteData in widget.exercise.correctSequence) {
       final parts = noteData.split('_');
       final noteName = parts[0];
@@ -182,22 +227,45 @@ class _MelodicPerceptionExerciseScreenState
       final midiNote = MusicUtils.noteNameToMidi(noteName);
       final durationMultiplier =
           MusicUtils.figureDurations[durationName] ?? 1.0;
-      final noteDuration = (quarterNoteDurationMs * durationMultiplier).round();
-      _midiPro.playNote(
-        sfId: _soundfontId!,
-        channel: 0,
-        key: midiNote,
-        velocity: 127,
-      );
-      await Future.delayed(Duration(milliseconds: noteDuration));
-      _midiPro.stopNote(
-        sfId: _soundfontId!,
-        channel: 0,
-        key: midiNote,
-      );
+      final noteDuration = (beatDurationMs * durationMultiplier);
+      final noteOnTime = currentTimeMs.round();
+      final noteOffTime = (currentTimeMs + noteDuration - 50).round();
+
+      events.putIfAbsent(noteOnTime, () => []).add(() {
+        _midiPro.playNote(
+            sfId: _instrumentSoundfontId!,
+            channel: 0,
+            key: midiNote,
+            velocity: 127);
+      });
+      events.putIfAbsent(noteOffTime, () => []).add(() {
+        _midiPro.stopNote(
+            sfId: _instrumentSoundfontId!, channel: 0, key: midiNote);
+      });
+      currentTimeMs += noteDuration;
     }
+    totalDurationMs = max(totalDurationMs, currentTimeMs.round());
+
+    final startTime = DateTime.now();
+    _playbackTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
+      final elapsed = DateTime.now().difference(startTime).inMilliseconds;
+
+      final timesToExecute = events.keys
+          .where((time) => time >= elapsed && time < elapsed + 10)
+          .toList();
+      for (var time in timesToExecute) {
+        events[time]?.forEach((action) => action());
+        events.remove(time);
+      }
+
+      if (elapsed > totalDurationMs + 500) {
+        timer.cancel();
+        _beatCountNotifier.value = 0;
+      }
+    });
   }
 
+  // MÉTODOS RESTAURADOS
   void _addNoteToSequence() {
     if (_isVerified) return;
     final timeSignatureParts = widget.exercise.timeSignature.split('/');
@@ -288,20 +356,14 @@ class _MelodicPerceptionExerciseScreenState
     setState(() {
       _isVerified = true;
     });
-
-    // Lógica de verificação
     final bool isCorrect = const ListEquality()
         .equals(_userSequence, widget.exercise.correctSequence);
     final userSession = context.read<UserSession>();
-
-    // Aplica as cores na pauta
     _renderUserSequence(
       colorizer: (note, isCorrect) {
         return 'color="${isCorrect ? AppColors.completedHex : AppColors.errorHex}"';
       },
     );
-
-    // Mostra o modal apropriado
     if (isCorrect) {
       userSession.answerCorrectly();
       _showSuccessDialog();
@@ -322,7 +384,6 @@ class _MelodicPerceptionExerciseScreenState
     }
   }
 
-  // NOVO MÉTODO DE DIÁLOGO DE SUCESSO
   Future<void> _showSuccessDialog() {
     _confettiController.play();
     return showDialog(
@@ -335,22 +396,27 @@ class _MelodicPerceptionExerciseScreenState
             textAlign: TextAlign.center,
             style: TextStyle(
                 color: AppColors.accent, fontWeight: FontWeight.bold)),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.star, color: AppColors.accent, size: 60),
-            SizedBox(height: 16),
-            Text(
-              'Você transcreveu a melodia perfeitamente!',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18, color: Colors.white),
+        content: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.star, color: AppColors.accent, size: 60),
+                SizedBox(height: 16),
+                Text(
+                  'Você transcreveu a melodia perfeitamente!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, color: Colors.white),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '+10 pontos!',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
             ),
-            SizedBox(height: 8),
-            Text(
-              '+10 pontos!',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ],
+          ),
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
@@ -365,7 +431,6 @@ class _MelodicPerceptionExerciseScreenState
     );
   }
 
-  // NOVO MÉTODO DE DIÁLOGO DE ERRO
   Future<void> _showErrorDialog() {
     final livesLeft = context.read<UserSession>().currentUser?.lives ?? 0;
     return showDialog(
@@ -383,7 +448,7 @@ class _MelodicPerceptionExerciseScreenState
           ],
         ),
         content: Text(
-          'A sequência não está correta. Compare as notas verdes e vermelhas.\nVidas restantes: $livesLeft',
+          'A sequência não está correta. Compare as notas na pauta.\nVidas restantes: $livesLeft',
           style: const TextStyle(color: AppColors.textSecondary),
         ),
         actionsAlignment: MainAxisAlignment.center,
@@ -442,6 +507,18 @@ class _MelodicPerceptionExerciseScreenState
         backgroundColor: AppColors.background,
         actions: [
           IconButton(
+            icon: Icon(
+              _isMetronomeEnabled ? Icons.timer : Icons.timer_off_outlined,
+              color: _isMetronomeEnabled ? AppColors.accent : Colors.white54,
+            ),
+            tooltip: "Metrônomo",
+            onPressed: () {
+              setState(() {
+                _isMetronomeEnabled = !_isMetronomeEnabled;
+              });
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.hearing),
             tooltip: "Ouvir a melodia",
             onPressed: _isVerified ? null : _playExerciseMelody,
@@ -466,7 +543,6 @@ class _MelodicPerceptionExerciseScreenState
             ),
         ],
       ),
-      // Adiciona um Stack para o efeito de confete
       body: Stack(
         alignment: Alignment.topCenter,
         children: [
@@ -506,6 +582,32 @@ class _MelodicPerceptionExerciseScreenState
               ],
             ),
           ),
+          Positioned(
+            top: 16,
+            right: 16,
+            child: ValueListenableBuilder<int>(
+              valueListenable: _beatCountNotifier,
+              builder: (context, beat, child) {
+                if (beat == 0) return const SizedBox.shrink();
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                      color: AppColors.card
+                          .withAlpha((255 * 0.8).round()), // LINT CORRIGIDO
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.accent, width: 2)),
+                  child: Text(
+                    beat.toString(),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
           ConfettiWidget(
             confettiController: _confettiController,
             blastDirectionality: BlastDirectionality.explosive,
@@ -523,9 +625,3 @@ class _MelodicPerceptionExerciseScreenState
     );
   }
 }
-
-// Pequena adição no seu arquivo de cores para os modais
-// Adicione em lib/app/core/theme/app_colors.dart
-// static const Color error = Color(0xFFD32F2F);
-// static const String completedHex = '#4CAF50'; // Usado no JS
-// static const String errorHex = '#F44336'; // Usado no JS

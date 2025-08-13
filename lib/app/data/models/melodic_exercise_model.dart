@@ -10,6 +10,7 @@ class MelodicExercise {
   final String referenceNote;
   final String musicXml;
   final List<String> correctSequence;
+  final int tempo; // ADICIONADO
 
   // --- ALTERAÇÃO INÍCIO ---
   // Adicionamos as paletas ao modelo.
@@ -30,6 +31,7 @@ class MelodicExercise {
     // --- ALTERAÇÃO INÍCIO ---
     required this.notePalette,
     required this.figurePalette,
+    required this.tempo, // ADICIONADO
     // --- ALTERAÇÃO FIM ---
   });
 
@@ -53,6 +55,7 @@ class MelodicExercise {
       notePalette: List<String>.from(map['note_palette'] ?? defaultNotePalette),
       figurePalette:
           List<String>.from(map['figure_palette'] ?? defaultFigurePalette),
+      tempo: map['tempo'] ?? 100,
       // --- ALTERAÇÃO FIM ---
     );
   }
