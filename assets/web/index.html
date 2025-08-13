@@ -11,7 +11,9 @@
             width: 100%;
             height: 100%;
             background-color: #0f0f2d; /* Cor de fundo do app */
-            overflow: hidden; /* Remove barras de rolagem */
+            /* --- CORREÇÃO: Permite a rolagem vertical se necessário --- */
+            overflow-y: auto; 
+            overflow-x: hidden;
         }
         #osmd-container {
             width: 100%;
@@ -21,7 +23,6 @@
 </head>
 <body>
     <div id="osmd-container"></div>
-
     <script src="./js/opensheetmusicdisplay.min.js"></script>
     <script src="./js/main.js"></script>
 </body>

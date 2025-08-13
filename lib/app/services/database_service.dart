@@ -6,6 +6,7 @@ import 'package:musilingo/app/data/models/user_profile_model.dart';
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/main.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DatabaseService {
   // --- MÉTODOS DE LIÇÃO ---
@@ -54,6 +55,36 @@ class DatabaseService {
     return UserProfile.fromMap(response);
   }
 
+  // --- ALTERAÇÃO INÍCIO ---
+  // Nova função para garantir que um perfil exista após o login.
+  Future<UserProfile> createProfileOnLogin(User user) async {
+    // 1. Tenta buscar o perfil existente.
+    final response = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    // 2. Se o perfil já existe, retorna-o.
+    if (response != null && response.isNotEmpty) {
+      return UserProfile.fromMap(response);
+    }
+    // 3. Se não existe, cria um novo perfil.
+    else {
+      final newProfileData = {
+        'id': user.id,
+        'full_name': user.userMetadata?['full_name'] ?? 'Músico Anônimo',
+        'avatar_url': user.userMetadata?['avatar_url'],
+      };
+      // Insere o novo perfil no banco de dados
+      await supabase.from('profiles').insert(newProfileData);
+
+      // Retorna o perfil recém-criado a partir dos mesmos dados
+      return UserProfile.fromMap(newProfileData);
+    }
+  }
+  // --- ALTERAÇÃO FIM ---
+
   Future<void> updateStats({
     required String userId,
     int? points,
@@ -83,13 +114,9 @@ class DatabaseService {
     return publicUrl;
   }
 
-  // --- ALTERAÇÃO INÍCIO ---
-  // Apenas esta função é alterada para se alinhar ao novo modelo de dados.
   Future<List<MelodicExercise>> getMelodicExercises() async {
     final response = await supabase
         .from('practice_melodies')
-        // A query continua a mesma ('*'), mas o `MelodicExercise.fromMap` agora
-        // irá procurar pelo novo campo 'music_xml'.
         .select('*')
         .order('difficulty', ascending: true)
         .order('id', ascending: true);
@@ -98,5 +125,4 @@ class DatabaseService {
         .map((data) => MelodicExercise.fromMap(data))
         .toList();
   }
-  // --- ALTERAÇÃO FIM ---
 }

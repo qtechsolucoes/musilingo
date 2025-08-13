@@ -6,7 +6,6 @@ import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/home/presentation/view/home_screen.dart';
 import 'package:musilingo/features/practice/presentation/view/practice_screen.dart';
 import 'package:musilingo/features/profile/presentation/view/profile_screen.dart';
-import 'package:musilingo/main.dart';
 import 'package:provider/provider.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -23,11 +22,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final userId = supabase.auth.currentUser?.id;
-      if (userId != null) {
-        Provider.of<UserSession>(context, listen: false)
-            .loadUserProfile(userId);
-      }
+      // --- CORREÇÃO: A chamada não precisa de nenhum argumento ---
+      Provider.of<UserSession>(context, listen: false).loadUserProfile();
     });
   }
 
@@ -47,7 +43,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     final userSession = context.watch<UserSession>();
 
-    // Se estiver carregando, mostra o ícone e o indicador
     if (userSession.isLoading) {
       return const Scaffold(
         body: Center(
@@ -63,7 +58,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       );
     }
 
-    // Se houver um erro, mostra a mensagem de erro
     if (userSession.errorMessage != null) {
       return Scaffold(
         body: Center(
@@ -79,7 +73,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       );
     }
 
-    // Se tudo estiver certo, mostra a tela principal
     return Scaffold(
       body: Center(
         child: _widgetOptions.elementAt(_selectedIndex),

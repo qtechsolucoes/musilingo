@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/data/models/user_profile_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
+import 'package:musilingo/main.dart';
 
 class UserSession extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService();
@@ -15,13 +16,19 @@ class UserSession extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Future<void> loadUserProfile(String userId) async {
+  // --- CORREÇÃO: A função agora não aceita mais argumentos. ---
+  Future<void> loadUserProfile() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _currentUser = await _databaseService.getProfile(userId);
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        throw 'Usuário não autenticado.';
+      }
+      // A lógica interna agora pega o usuário diretamente do Supabase.
+      _currentUser = await _databaseService.createProfileOnLogin(user);
     } catch (e) {
       _errorMessage = "Erro ao carregar perfil: ${e.toString()}";
     } finally {

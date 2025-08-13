@@ -26,12 +26,12 @@ dependencies:
   collection: ^1.18.0
   image_picker: ^1.1.2
   confetti: ^0.7.0
-  just_audio: ^0.10.4 # Necessário para a LessonScreen
-
-  # --- GARANTA QUE ESTAS DUAS LINHAS ESTEJAM PRESENTES ---
+  just_audio: ^0.10.4
   webview_flutter: ^4.8.0
-  flutter_midi: ^1.1.0
-  # --- FIM DA VERIFICAÇÃO ---
+
+  # --- GARANTA QUE ESTA LINHA ESTEJA PRESENTE ---
+  flutter_soloud: ^1.2.0
+  # --- E QUE A LINHA flutter_midi FOI REMOVIDA ---
 
 dev_dependencies:
   flutter_test:
@@ -48,6 +48,5 @@ flutter:
   assets:
     - assets/images/
     - assets/sf2/GeneralUserGS.sf2
-    - assets/sf2/
     - assets/web/
     - assets/web/js/

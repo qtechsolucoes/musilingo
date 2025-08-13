@@ -1,14 +1,16 @@
 // lib/features/practice/presentation/view/melodic_perception_exercise_screen.dart
 
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_midi/flutter_midi.dart';
+// --- A CORREÇÃO CRUCIAL ESTÁ AQUI ---
+import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-// Classe de utilidades para conversões e lógicas musicais
+// (As classes MusicUtils e UserNote permanecem as mesmas)
 class MusicUtils {
   static const Map<String, int> _noteValues = {
     'C': 0,
@@ -29,9 +31,8 @@ class MusicUtils {
     'BB': 10,
     'B': 11
   };
-
   static int noteNameToMidi(String noteName) {
-    if (noteName.length < 2) return 60; // Retorna Dó central como padrão
+    if (noteName.length < 2) return 60;
     try {
       final octave = int.parse(noteName.substring(noteName.length - 1));
       final key = noteName.substring(0, noteName.length - 1).toUpperCase();
@@ -42,7 +43,6 @@ class MusicUtils {
     }
   }
 
-  // Mapeamento de nomes internos (inglês) para valores de duração (semínima = 1.0)
   static const Map<String, double> figureDurations = {
     'whole': 4.0,
     'half': 2.0,
@@ -52,6 +52,16 @@ class MusicUtils {
     '32nd': 0.125,
     '64th': 0.0625
   };
+  static double midiToHz(int midiNote) {
+    return 440.0 * pow(2.0, (midiNote - 69.0) / 12.0);
+  }
+}
+
+class UserNote {
+  final String figure;
+  final int staffPosition;
+  bool? isCorrect;
+  UserNote({required this.figure, required this.staffPosition, this.isCorrect});
 }
 
 class MelodicPerceptionExerciseScreen extends StatefulWidget {
@@ -66,7 +76,9 @@ class MelodicPerceptionExerciseScreen extends StatefulWidget {
 class _MelodicPerceptionExerciseScreenState
     extends State<MelodicPerceptionExerciseScreen> {
   late final WebViewController _controller;
-  final FlutterMidi _flutterMidi = FlutterMidi();
+  final SoLoud _soLoud = SoLoud.instance;
+  SoundFont? _soundFont;
+
   bool _isWebViewReady = false;
   bool _isSoundfontReady = false;
 
@@ -83,7 +95,6 @@ class _MelodicPerceptionExerciseScreenState
     "C5"
   ];
 
-  // Paleta de figuras com nomes, valores e símbolos
   final Map<String, String> _figurePalette = {
     'whole': 'Semibreve (𝅝)',
     'half': 'Mínima (𝅗𝅥)',
@@ -92,7 +103,7 @@ class _MelodicPerceptionExerciseScreenState
     '16th': 'Semicolcheia (♬)',
   };
   String _selectedNote = "C4";
-  String _selectedFigure = "quarter"; // Valor interno em inglês
+  String _selectedFigure = "quarter";
 
   @override
   void initState() {
@@ -106,7 +117,7 @@ class _MelodicPerceptionExerciseScreenState
       DeviceOrientation.landscapeLeft,
     ]);
 
-    await _loadSoundfont();
+    _initializeAudio();
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -126,18 +137,18 @@ class _MelodicPerceptionExerciseScreenState
       ..loadFlutterAsset('assets/web/index.html');
   }
 
-  Future<void> _loadSoundfont() async {
+  Future<void> _initializeAudio() async {
     try {
-      _flutterMidi.unmute();
-      ByteData sf2 = await rootBundle.load('assets/sf2/GeneralUserGS.sf2');
-      await _flutterMidi.prepare(sf2: sf2, name: 'GeneralUserGS.sf2');
+      await _soLoud.init();
+      final sf = await _soLoud.loadAsset('assets/sf2/GeneralUserGS.sf2');
       if (mounted) {
         setState(() {
+          _soundFont = sf;
           _isSoundfontReady = true;
         });
       }
     } catch (e) {
-      debugPrint("Erro ao carregar o soundfont: $e");
+      debugPrint("Erro ao inicializar o áudio com SoLoud: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -149,6 +160,7 @@ class _MelodicPerceptionExerciseScreenState
 
   @override
   void dispose() {
+    _soLoud.deinit();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -159,7 +171,7 @@ class _MelodicPerceptionExerciseScreenState
   }
 
   Future<void> _playExerciseMelody() async {
-    if (!_isSoundfontReady) {
+    if (!_isSoundfontReady || _soundFont == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Instrumentos ainda não estão prontos.'),
       ));
@@ -174,13 +186,13 @@ class _MelodicPerceptionExerciseScreenState
       final durationName = parts[1];
 
       final midiNote = MusicUtils.noteNameToMidi(noteName);
+      final frequency = MusicUtils.midiToHz(midiNote);
       final durationMultiplier =
           MusicUtils.figureDurations[durationName] ?? 1.0;
       final noteDuration = (quarterNoteDurationMs * durationMultiplier).round();
 
-      _flutterMidi.playMidiNote(midi: midiNote);
+      _soLoud.playSfx(_soundFont!, pitch: frequency, volume: 1.0);
       await Future.delayed(Duration(milliseconds: noteDuration));
-      _flutterMidi.stopMidiNote(midi: midiNote);
     }
   }
 
@@ -295,7 +307,6 @@ class _MelodicPerceptionExerciseScreenState
   }
 
   void _renderBlankStaff() {
-    // Usa o MusicXML que veio do banco de dados para a pauta em branco
     _loadScoreIntoWebView(widget.exercise.musicXml);
   }
 
@@ -327,13 +338,15 @@ class _MelodicPerceptionExerciseScreenState
             title: Text(widget.exercise.title),
             backgroundColor: AppColors.background,
           ),
-          body: const Center(
+          body: Center(
               child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(color: AppColors.accent),
-              SizedBox(height: 16),
-              Text("Carregando..."),
+              const CircularProgressIndicator(color: AppColors.accent),
+              const SizedBox(height: 16),
+              Text(!_isSoundfontReady
+                  ? "Preparando instrumentos..."
+                  : "Carregando pauta..."),
             ],
           )));
     }
