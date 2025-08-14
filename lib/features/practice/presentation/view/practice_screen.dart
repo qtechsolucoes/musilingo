@@ -36,7 +36,6 @@ class PracticeScreen extends StatelessWidget {
             subtitle: 'Ouça e transcreva pequenas melodias.',
             isEnabled: true, // Habilitado para implementação
             onTap: () {
-              // CORREÇÃO: A navegação agora está implementada
               Navigator.of(context).push(MaterialPageRoute(
                   builder: (context) => const MelodicPerceptionListScreen()));
             },
@@ -66,8 +65,10 @@ class PracticeScreen extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return Card(
-      // ignore: deprecated_member_use
-      color: isEnabled ? AppColors.card : Colors.grey.shade800.withOpacity(0.5),
+      // CORREÇÃO APLICADA AQUI
+      color: isEnabled
+          ? AppColors.card
+          : Colors.grey.shade800.withAlpha((255 * 0.5).round()),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: isEnabled ? onTap : null,

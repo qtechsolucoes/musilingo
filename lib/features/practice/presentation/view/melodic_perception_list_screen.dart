@@ -5,7 +5,7 @@ import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/features/practice/presentation/view/melodic_perception_exercise_screen.dart';
-import 'package:musilingo/features/practice/presentation/widgets/exercise_node_widget.dart'; // Importa o novo widget
+import 'package:musilingo/features/practice/presentation/widgets/exercise_node_widget.dart';
 
 class MelodicPerceptionListScreen extends StatefulWidget {
   const MelodicPerceptionListScreen({super.key});
@@ -64,9 +64,7 @@ class _MelodicPerceptionListScreenState
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Pinta o caminho da trilha
                   _buildPracticePath(exercises.length, nodeSpacing),
-                  // Posiciona os nós dos exercícios
                   ..._buildExerciseNodes(exercises, nodeSpacing),
                 ],
               ),
@@ -82,7 +80,7 @@ class _MelodicPerceptionListScreenState
     return List.generate(exercises.length, (index) {
       final exercise = exercises[index];
       return Positioned(
-        top: index * spacing + 20, // Adiciona um padding inicial
+        top: index * spacing + 20,
         child: ExerciseNodeWidget(
           exercise: exercise,
           onTap: () {
@@ -104,7 +102,6 @@ class _MelodicPerceptionListScreenState
   }
 }
 
-// Um CustomPainter simples para desenhar a linha vertical da trilha
 class _PracticePathPainter extends CustomPainter {
   final int nodeCount;
   final double spacing;
@@ -114,8 +111,8 @@ class _PracticePathPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      // ignore: deprecated_member_use
-      ..color = AppColors.primary.withOpacity(0.6)
+      // CORREÇÃO APLICADA AQUI
+      ..color = AppColors.primary.withAlpha((255 * 0.6).round())
       ..style = PaintingStyle.stroke
       ..strokeWidth = 8.0
       ..strokeCap = StrokeCap.round;

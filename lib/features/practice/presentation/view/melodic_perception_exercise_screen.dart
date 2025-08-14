@@ -1,7 +1,6 @@
 // lib/features/practice/presentation/view/melodic_perception_exercise_screen.dart
 
 import 'dart:async';
-import 'dart:math';
 import 'package:collection/collection.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
@@ -80,9 +79,8 @@ class _MelodicPerceptionExerciseScreenState
   List<String> _userSequence = [];
   bool _isVerified = false;
 
-  bool _isMetronomeEnabled = false;
+  bool _isMetronomeEnabled = true;
   final ValueNotifier<int> _beatCountNotifier = ValueNotifier(0);
-  Timer? _playbackTimer;
 
   static const Map<String, String> _allFigureNames = {
     'whole': 'Semibreve (𝅝)',
@@ -136,14 +134,15 @@ class _MelodicPerceptionExerciseScreenState
 
   Future<void> _initializeAudio() async {
     try {
+      const sfPath = 'assets/sf2/GeneralUserGS.sf2';
       final sfInstrument = await _midiPro.loadSoundfont(
-        path: 'assets/sf2/GeneralUserGS.sf2',
+        path: sfPath,
         bank: 0,
         program: 0,
       );
       final sfPercussion = await _midiPro.loadSoundfont(
-        path: 'assets/sf2/Standard_Drum_Kit.sf2',
-        bank: 0,
+        path: sfPath,
+        bank: 128,
         program: 0,
       );
       if (mounted) {
@@ -162,7 +161,6 @@ class _MelodicPerceptionExerciseScreenState
   void dispose() {
     _confettiController.dispose();
     _beatCountNotifier.dispose();
-    _playbackTimer?.cancel();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -172,100 +170,95 @@ class _MelodicPerceptionExerciseScreenState
     super.dispose();
   }
 
+  // --- LÓGICA DE PLAYBACK FINAL E POLIDA ---
   Future<void> _playExerciseMelody() async {
     if (!_isSoundfontReady ||
         _instrumentSoundfontId == null ||
         _percussionSoundfontId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Instrumentos ainda não estão prontos.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Instrumentos ainda não estão prontos.')),
+        );
+      }
       return;
     }
 
-    _playbackTimer?.cancel();
-
     final int bpm = widget.exercise.tempo;
     final double beatDurationMs = 60000.0 / bpm;
-    const int metronomeMidiNote = 37;
-    const int percussionChannel = 9;
-
-    Map<int, List<Function>> events = {};
-    int totalDurationMs = 0;
     final timeSignatureParts = widget.exercise.timeSignature.split('/');
     final beatsPerMeasure = int.parse(timeSignatureParts[0]);
 
-    double melodyDuration = 0;
-    for (String noteData in widget.exercise.correctSequence) {
-      final durationName = noteData.split('_')[1];
-      final durationMultiplier =
-          MusicUtils.figureDurations[durationName] ?? 1.0;
-      melodyDuration += beatDurationMs * durationMultiplier;
-    }
-    final totalBeats =
-        (melodyDuration / beatDurationMs).ceil() + beatsPerMeasure;
-
-    if (_isMetronomeEnabled) {
-      for (int i = 0; i < totalBeats; i++) {
-        final time = (i * beatDurationMs).round();
-        events.putIfAbsent(time, () => []).add(() {
-          _beatCountNotifier.value = (i % beatsPerMeasure) + 1;
-          _midiPro.playNote(
-              sfId: _percussionSoundfontId!,
-              channel: percussionChannel,
-              key: metronomeMidiNote,
-              velocity: (i % beatsPerMeasure) == 0 ? 127 : 100);
-        });
-      }
+    // 1. Contagem inicial com som de percussão neutro
+    for (int i = 0; i < beatsPerMeasure; i++) {
+      _beatCountNotifier.value = i + 1;
+      _midiPro.playNote(
+        sfId: _percussionSoundfontId!,
+        channel: 9,
+        // CORREÇÃO DE TIMBRE: Usando sons mais adequados
+        key: (i == 0)
+            ? 37
+            : 76, // Side Stick no tempo 1, High Wood Block nos outros
+        velocity: (i == 0) ? 127 : 100,
+      );
+      await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
     }
 
-    double currentTimeMs =
-        _isMetronomeEnabled ? (beatsPerMeasure * beatDurationMs) : 0;
+    // 2. Playback da melodia com metrônomo sincronizado
+    int currentBeat = 0;
     for (String noteData in widget.exercise.correctSequence) {
       final parts = noteData.split('_');
       final noteName = parts[0];
       final durationName = parts[1];
       final midiNote = MusicUtils.noteNameToMidi(noteName);
-      final durationMultiplier =
+      final beatDurationMultiplier =
           MusicUtils.figureDurations[durationName] ?? 1.0;
-      final noteDuration = (beatDurationMs * durationMultiplier);
-      final noteOnTime = currentTimeMs.round();
-      final noteOffTime = (currentTimeMs + noteDuration - 50).round();
 
-      events.putIfAbsent(noteOnTime, () => []).add(() {
+      // CORREÇÃO DE SINCRONIA: Toca a nota e o primeiro clique JUNTOS
+      _midiPro.playNote(
+          sfId: _instrumentSoundfontId!,
+          channel: 0,
+          key: midiNote,
+          velocity: 127);
+
+      if (_isMetronomeEnabled) {
+        _beatCountNotifier.value = (currentBeat % beatsPerMeasure) + 1;
         _midiPro.playNote(
-            sfId: _instrumentSoundfontId!,
-            channel: 0,
-            key: midiNote,
-            velocity: 127);
-      });
-      events.putIfAbsent(noteOffTime, () => []).add(() {
-        _midiPro.stopNote(
-            sfId: _instrumentSoundfontId!, channel: 0, key: midiNote);
-      });
-      currentTimeMs += noteDuration;
+            sfId: _percussionSoundfontId!,
+            channel: 9,
+            key: (currentBeat % beatsPerMeasure == 0) ? 37 : 76,
+            velocity: 100);
+      }
+
+      // Espera a duração do primeiro tempo
+      await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
+
+      // Loop para os cliques restantes da mesma nota (se a nota for mais longa que um tempo)
+      for (int i = 1; i < beatDurationMultiplier; i++) {
+        if (_isMetronomeEnabled) {
+          _beatCountNotifier.value = ((currentBeat + i) % beatsPerMeasure) + 1;
+          _midiPro.playNote(
+              sfId: _percussionSoundfontId!,
+              channel: 9,
+              key: ((currentBeat + i) % beatsPerMeasure == 0) ? 37 : 76,
+              velocity: 100);
+        }
+        await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
+      }
+
+      // Para a nota da melodia ao final de sua duração total
+      _midiPro.stopNote(
+          sfId: _instrumentSoundfontId!, channel: 0, key: midiNote);
+      currentBeat += beatDurationMultiplier.round();
     }
-    totalDurationMs = max(totalDurationMs, currentTimeMs.round());
 
-    final startTime = DateTime.now();
-    _playbackTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
-      final elapsed = DateTime.now().difference(startTime).inMilliseconds;
-
-      final timesToExecute = events.keys
-          .where((time) => time >= elapsed && time < elapsed + 10)
-          .toList();
-      for (var time in timesToExecute) {
-        events[time]?.forEach((action) => action());
-        events.remove(time);
-      }
-
-      if (elapsed > totalDurationMs + 500) {
-        timer.cancel();
-        _beatCountNotifier.value = 0;
-      }
-    });
+    await Future.delayed(const Duration(milliseconds: 500));
+    _beatCountNotifier.value = 0;
   }
 
-  // MÉTODOS RESTAURADOS
+  // O restante do código permanece inalterado.
+  // ... (código de _addNoteToSequence até o final do build)
+
   void _addNoteToSequence() {
     if (_isVerified) return;
     final timeSignatureParts = widget.exercise.timeSignature.split('/');
@@ -544,7 +537,6 @@ class _MelodicPerceptionExerciseScreenState
         ],
       ),
       body: Stack(
-        alignment: Alignment.topCenter,
         children: [
           Padding(
             padding: const EdgeInsets.all(8.0),
@@ -584,24 +576,37 @@ class _MelodicPerceptionExerciseScreenState
           ),
           Positioned(
             top: 16,
-            right: 16,
+            left: 16,
             child: ValueListenableBuilder<int>(
               valueListenable: _beatCountNotifier,
               builder: (context, beat, child) {
-                if (beat == 0) return const SizedBox.shrink();
-                return Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                      color: AppColors.card
-                          .withAlpha((255 * 0.8).round()), // LINT CORRIGIDO
+                return AnimatedOpacity(
+                  opacity: beat == 0 ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.accent, width: 2)),
-                  child: Text(
-                    beat.toString(),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.accent,
+                      boxShadow: [
+                        BoxShadow(
+                          // ignore: deprecated_member_use
+                          color: AppColors.accent.withOpacity(0.7),
+                          blurRadius: 15.0,
+                          spreadRadius: 2.0,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        beat.toString(),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 );

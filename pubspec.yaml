@@ -45,6 +45,5 @@ flutter:
   assets:
     - assets/images/
     - assets/sf2/GeneralUserGS.sf2
-    - assets/sf2/Standard_Drum_Kit.sf2 
     - assets/web/
     - assets/web/js/
