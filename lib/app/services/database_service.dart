@@ -2,9 +2,11 @@
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:musilingo/app/data/models/harmonic_exercise_model.dart';
+import 'package:musilingo/app/data/models/harmonic_progression_model.dart'; // <-- NOVO IMPORT
 import 'package:musilingo/app/data/models/module_model.dart';
 import 'package:musilingo/app/data/models/user_profile_model.dart';
-import 'package:musilingo/app/data/models/weekly_xp_model.dart'; // <-- NOVO IMPORT
+import 'package:musilingo/app/data/models/weekly_xp_model.dart';
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/main.dart';
@@ -91,8 +93,7 @@ class DatabaseService {
         'id': user.id,
         'full_name': user.userMetadata?['full_name'] ?? 'Músico Anônimo',
         'avatar_url': user.userMetadata?['avatar_url'],
-        'league':
-            'Bronze', // Garante que novos utilizadores começam na liga Bronze
+        'league': 'Bronze',
       };
       await supabase.from('profiles').insert(newProfileData);
 
@@ -100,7 +101,6 @@ class DatabaseService {
     }
   }
 
-  // ATUALIZADO para incluir o campo 'league'
   Future<void> updateStats({
     required String userId,
     int? points,
@@ -109,7 +109,7 @@ class DatabaseService {
     int? wrongAnswers,
     int? currentStreak,
     String? lastPracticeDate,
-    String? league, // <-- NOVO PARÂMETRO
+    String? league,
   }) async {
     final updates = <String, dynamic>{};
     if (points != null) updates['points'] = points;
@@ -120,7 +120,7 @@ class DatabaseService {
     if (lastPracticeDate != null) {
       updates['last_practice_date'] = lastPracticeDate;
     }
-    if (league != null) updates['league'] = league; // <-- NOVA LINHA
+    if (league != null) updates['league'] = league;
 
     if (updates.isNotEmpty) {
       await supabase.from('profiles').update(updates).eq('id', userId);
@@ -150,10 +150,6 @@ class DatabaseService {
         .toList();
   }
 
-  // --- NOVAS FUNÇÕES PARA AS LIGAS ---
-
-  /// Adiciona pontos ao XP semanal de um utilizador.
-  /// Usa um procedimento da base de dados (RPC) para garantir que a operação é atómica.
   Future<void> upsertWeeklyXp(String userId, int pointsToAdd) async {
     await supabase.rpc('upsert_weekly_xp', params: {
       'p_user_id': userId,
@@ -161,22 +157,39 @@ class DatabaseService {
     });
   }
 
-  /// Vai buscar o ranking da liga de um determinado utilizador.
   Future<List<WeeklyXp>> getLeagueLeaderboard(String userLeague) async {
-    // Esta query é mais complexa:
-    // 1. Seleciona todos os campos da tabela 'weekly_xp'
-    // 2. Junta (`inner join`) com a tabela 'profiles' para obter os dados do perfil
-    // 3. Filtra para trazer apenas os utilizadores da mesma liga que o jogador atual
-    // 4. Ordena por XP descendente (quem tem mais pontos aparece primeiro)
-    // 5. Limita o resultado aos 30 melhores para manter os grupos pequenos
     final response = await supabase
         .from('weekly_xp')
-        .select(
-            '*, profiles!inner(*)') // !inner garante que só vêm resultados com perfil correspondente
+        .select('*, profiles!inner(*)')
         .eq('profiles.league', userLeague)
         .order('xp', ascending: false)
         .limit(30);
 
     return (response as List).map((data) => WeeklyXp.fromMap(data)).toList();
+  }
+
+  Future<List<HarmonicExercise>> getHarmonicExercises() async {
+    final response = await supabase
+        .from('practice_harmonies')
+        .select('*')
+        .order('difficulty', ascending: true)
+        .order('id', ascending: true);
+
+    return (response as List)
+        .map((data) => HarmonicExercise.fromMap(data))
+        .toList();
+  }
+
+  // --- NOVA FUNÇÃO PARA EXERCÍCIOS DE PROGRESSÃO HARMÔNICA ---
+  Future<List<HarmonicProgression>> getHarmonicProgressions() async {
+    final response = await supabase
+        .from('practice_progressions')
+        .select('*')
+        .order('difficulty', ascending: true)
+        .order('id', ascending: true);
+
+    return (response as List)
+        .map((data) => HarmonicProgression.fromMap(data))
+        .toList();
   }
 }

@@ -7,14 +7,12 @@ import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/main.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:collection/collection.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
 
 class LessonScreen extends StatefulWidget {
   final Lesson lesson;
-
   const LessonScreen({super.key, required this.lesson});
 
   @override
@@ -30,9 +28,10 @@ class _LessonScreenState extends State<LessonScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   late ConfettiController _confettiController;
 
-  List<String> _currentDragItems = [];
-  final List<String> _dropTargetItems = [];
-  bool _dragAndDropCorrect = false;
+  // ESTADO PARA O NOVO WIDGET DE ARRASTAR E SOLTAR
+  List<String> _dragSourceItems = []; // Itens que podem ser arrastados
+  final Map<int, String?> _dropTargetMatches =
+      {}; // Mapa do que foi solto em cada alvo
 
   @override
   void initState() {
@@ -47,6 +46,15 @@ class _LessonScreenState extends State<LessonScreen> {
     _audioPlayer.dispose();
     _confettiController.dispose();
     super.dispose();
+  }
+
+  void _setupDragAndDropState(DragAndDropStep step) {
+    if (_dragSourceItems.isEmpty && _dropTargetMatches.isEmpty) {
+      _dragSourceItems = List<String>.from(step.draggableItems)..shuffle();
+      for (int i = 0; i < step.correctOrder.length; i++) {
+        _dropTargetMatches[i] = null;
+      }
+    }
   }
 
   void _onAnswerSubmitted(bool isCorrect) {
@@ -68,6 +76,27 @@ class _LessonScreenState extends State<LessonScreen> {
     });
   }
 
+  void _checkDragAndDropAnswer(DragAndDropStep step) {
+    final correctMatches =
+        Map.fromIterables(step.draggableItems, step.correctOrder);
+    bool allCorrect = true;
+
+    for (int i = 0; i < step.correctOrder.length; i++) {
+      final userPlacedItem = _dropTargetMatches[i];
+      final correctDefinition = step.correctOrder[i];
+
+      final correctKey = correctMatches.entries
+          .firstWhere((entry) => entry.value == correctDefinition)
+          .key;
+
+      if (userPlacedItem != correctKey) {
+        allCorrect = false;
+        break;
+      }
+    }
+    _onAnswerSubmitted(allCorrect);
+  }
+
   void _resetStep() {
     setState(() {
       _showFeedback = false;
@@ -75,8 +104,9 @@ class _LessonScreenState extends State<LessonScreen> {
       _stepsFuture.then((steps) {
         if (steps.isNotEmpty && steps[_currentStepIndex] is DragAndDropStep) {
           final step = steps[_currentStepIndex] as DragAndDropStep;
-          _dropTargetItems.clear();
-          _currentDragItems = List<String>.from(step.draggableItems)..shuffle();
+          _dragSourceItems.clear();
+          _dropTargetMatches.clear();
+          _setupDragAndDropState(step);
         }
       });
     });
@@ -92,15 +122,13 @@ class _LessonScreenState extends State<LessonScreen> {
         _currentStepIndex++;
         _showFeedback = false;
         _isCorrect = null;
-        _currentDragItems = [];
-        _dropTargetItems.clear();
-        _dragAndDropCorrect = false;
+        _dragSourceItems = [];
+        _dropTargetMatches.clear();
       });
     } else {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
         await _databaseService.markLessonAsCompleted(userId, widget.lesson.id);
-        // CHAMA A LÓGICA DE OFENSIVAS
         await userSession.recordPractice();
       }
 
@@ -140,11 +168,8 @@ class _LessonScreenState extends State<LessonScreen> {
               final currentStep = steps[_currentStepIndex];
               final progress = (_currentStepIndex + 1) / steps.length;
 
-              if (currentStep is DragAndDropStep &&
-                  _currentDragItems.isEmpty &&
-                  _dropTargetItems.isEmpty) {
-                _currentDragItems =
-                    List<String>.from(currentStep.draggableItems)..shuffle();
+              if (currentStep is DragAndDropStep) {
+                _setupDragAndDropState(currentStep);
               }
 
               if (userLives <= 0 && !_showFeedback) {
@@ -165,7 +190,22 @@ class _LessonScreenState extends State<LessonScreen> {
                       child: _buildStepWidget(currentStep),
                     ),
                   ),
-                  if (_showFeedback) _buildFeedbackBar(steps.length),
+                  if (currentStep is! DragAndDropStep && _showFeedback)
+                    _buildFeedbackBar(steps.length)
+                  else if (currentStep is DragAndDropStep && !_showFeedback)
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: ElevatedButton(
+                        onPressed: () => _checkDragAndDropAnswer(currentStep),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.completed,
+                            minimumSize: const Size(double.infinity, 50)),
+                        child: const Text('Verificar',
+                            style: TextStyle(fontSize: 18)),
+                      ),
+                    )
+                  else if (currentStep is DragAndDropStep && _showFeedback)
+                    _buildFeedbackBar(steps.length),
                 ],
               );
             },
@@ -185,6 +225,287 @@ class _LessonScreenState extends State<LessonScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepWidget(LessonStep step) {
+    switch (step.type) {
+      case LessonStepType.explanation:
+        return _buildExplanationWidget(step as ExplanationStep);
+      case LessonStepType.multipleChoice:
+        return _buildMultipleChoiceWidget(step as MultipleChoiceQuestionStep);
+      case LessonStepType.dragAndDrop:
+        return _buildDragAndDropWidget(step as DragAndDropStep);
+      case LessonStepType.earTraining:
+        return _buildEarTrainingWidget(step as EarTrainingStep);
+    }
+  }
+
+  Widget _buildExplanationWidget(ExplanationStep step) {
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  step.text,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 22, height: 1.5),
+                ),
+                if (step.imageUrl != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0, bottom: 16.0),
+                    child: Image.network(step.imageUrl!),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            final steps = await _stepsFuture;
+            _nextStep(steps.length);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            minimumSize: const Size(double.infinity, 50),
+          ),
+          child: const Text('Continuar', style: TextStyle(fontSize: 18)),
+        )
+      ],
+    );
+  }
+
+  Widget _buildMultipleChoiceWidget(MultipleChoiceQuestionStep step) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          step.questionText,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 40),
+        ...step.options.map((option) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: ElevatedButton(
+              onPressed: _showFeedback
+                  ? null
+                  : () => _onAnswerSubmitted(option == step.correctAnswer),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              child: Text(option, style: const TextStyle(fontSize: 18)),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildDragAndDropWidget(DragAndDropStep step) {
+    return Column(
+      children: [
+        Text(
+          step.questionText,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: List.generate(step.correctOrder.length, (index) {
+                    return DragTarget<String>(
+                      builder: (context, candidateData, rejectedData) {
+                        return Container(
+                          height: 60,
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.card,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: _dropTargetMatches[index] != null
+                                      ? AppColors.accent
+                                      : AppColors.primary,
+                                  borderRadius: const BorderRadius.only(
+                                      topLeft: Radius.circular(11),
+                                      bottomLeft: Radius.circular(11)),
+                                ),
+                                child: _dropTargetMatches[index] != null
+                                    ? Center(
+                                        child: Text(_dropTargetMatches[index]!,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: AppColors.background)))
+                                    : null,
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8.0),
+                                  child: Text(step.correctOrder[index],
+                                      style: const TextStyle(
+                                          color: AppColors.textSecondary)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      onWillAcceptWithDetails: (details) =>
+                          !_dropTargetMatches.containsValue(details.data),
+                      onAcceptWithDetails: (details) {
+                        setState(() {
+                          _dropTargetMatches[index] = details.data;
+                          _dragSourceItems.remove(details.data);
+                        });
+                      },
+                    );
+                  }),
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: _dragSourceItems.map((item) {
+                    return Draggable<String>(
+                      data: item,
+                      feedback: Material(
+                        type: MaterialType.transparency,
+                        child: Chip(
+                            label: Text(item),
+                            backgroundColor: AppColors.accent,
+                            labelStyle: const TextStyle(
+                                color: AppColors.background,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                      childWhenDragging: Chip(
+                          label: Text(item), backgroundColor: AppColors.card),
+                      child: Chip(label: Text(item)),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEarTrainingWidget(EarTrainingStep step) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          step.text,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 40),
+        IconButton(
+          icon: const Icon(Icons.play_circle_fill, color: AppColors.accent),
+          iconSize: 80,
+          onPressed: () async {
+            if (step.audioUrl.isEmpty) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content:
+                        Text('Áudio para este exercício não encontrado.')));
+              }
+              return;
+            }
+            try {
+              await _audioPlayer.setUrl(step.audioUrl);
+              _audioPlayer.play();
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Não foi possível carregar o áudio.')));
+              }
+            }
+          },
+        ),
+        const SizedBox(height: 40),
+        ...step.options.map((option) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: ElevatedButton(
+              onPressed: _showFeedback
+                  ? null
+                  : () => _onAnswerSubmitted(option == step.correctAnswer),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              child: Text(option, style: const TextStyle(fontSize: 18)),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildFeedbackBar(int totalSteps) {
+    final bool isCorrect = _isCorrect ?? false;
+    final userLives = context.watch<UserSession>().currentUser?.lives ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: isCorrect ? Colors.green.withAlpha(50) : Colors.red.withAlpha(50),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              isCorrect ? 'Correto!' : 'Ops! Tente novamente.',
+              style: TextStyle(
+                color: isCorrect ? Colors.green.shade200 : Colors.red.shade200,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          if (isCorrect)
+            ElevatedButton(
+              onPressed: () => _nextStep(totalSteps),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade600),
+              child: Text(_currentStepIndex < totalSteps - 1
+                  ? 'Continuar'
+                  : 'Finalizar Lição'),
+            )
+          else if (userLives > 0)
+            ElevatedButton(
+              onPressed: _resetStep,
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade600),
+              child: const Text('Tentar Novamente'),
+            )
+          else
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Sair da Lição'),
+            ),
         ],
       ),
     );
@@ -282,260 +603,6 @@ class _LessonScreenState extends State<LessonScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('Sair da Lição'),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepWidget(LessonStep step) {
-    switch (step.type) {
-      case LessonStepType.explanation:
-        return _buildExplanationWidget(step as ExplanationStep);
-      case LessonStepType.multipleChoice:
-        return _buildMultipleChoiceWidget(step as MultipleChoiceQuestionStep);
-      case LessonStepType.dragAndDrop:
-        return _buildDragAndDropWidget(step as DragAndDropStep);
-      case LessonStepType.earTraining:
-        return _buildEarTrainingWidget(step as EarTrainingStep);
-    }
-  }
-
-  Widget _buildExplanationWidget(ExplanationStep step) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  step.text,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 22, height: 1.5),
-                ),
-                if (step.imageUrl != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16.0, bottom: 16.0),
-                    child: Image.network(step.imageUrl!),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-            final steps = await _stepsFuture;
-            _nextStep(steps.length);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            minimumSize: const Size(double.infinity, 50),
-          ),
-          child: const Text('Continuar', style: TextStyle(fontSize: 18)),
-        )
-      ],
-    );
-  }
-
-  Widget _buildMultipleChoiceWidget(MultipleChoiceQuestionStep step) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          step.questionText,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 40),
-        ...step.options.map((option) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ElevatedButton(
-              onPressed: _showFeedback
-                  ? null
-                  : () => _onAnswerSubmitted(option == step.correctAnswer),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              child: Text(option, style: const TextStyle(fontSize: 18)),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildDragAndDropWidget(DragAndDropStep step) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          step.questionText,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        DragTarget<String>(
-          builder: (context, candidateData, rejectedData) {
-            return Container(
-              constraints: const BoxConstraints(minHeight: 60),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary)),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Wrap(
-                  spacing: 8.0,
-                  runSpacing: 4.0,
-                  children: _dropTargetItems
-                      .map((item) => Chip(label: Text(item)))
-                      .toList(),
-                ),
-              ),
-            );
-          },
-          onAcceptWithDetails: (details) {
-            if (_showFeedback) return;
-            setState(() {
-              final data = details.data;
-              _dropTargetItems.add(data);
-              _currentDragItems.remove(data);
-              if (_currentDragItems.isEmpty) {
-                _dragAndDropCorrect = const ListEquality()
-                    .equals(_dropTargetItems, step.correctOrder);
-                _onAnswerSubmitted(_dragAndDropCorrect);
-              }
-            });
-          },
-        ),
-        Expanded(
-          child: Center(
-            child: Wrap(
-              spacing: 10.0,
-              runSpacing: 10.0,
-              alignment: WrapAlignment.center,
-              children: _currentDragItems.map((item) {
-                return Draggable<String>(
-                  data: item,
-                  feedback: Material(
-                    type: MaterialType.transparency,
-                    child: Chip(
-                        label: Text(item), backgroundColor: AppColors.accent),
-                  ),
-                  childWhenDragging:
-                      const Chip(label: Text(""), backgroundColor: Colors.grey),
-                  child: Chip(label: Text(item)),
-                );
-              }).toList(),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEarTrainingWidget(EarTrainingStep step) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          step.text,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 40),
-        IconButton(
-          icon: const Icon(Icons.play_circle_fill, color: AppColors.accent),
-          iconSize: 80,
-          onPressed: () async {
-            if (step.audioUrl.isEmpty) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content:
-                        Text('Áudio para este exercício não encontrado.')));
-              }
-              return;
-            }
-
-            try {
-              await _audioPlayer.setUrl(step.audioUrl);
-              _audioPlayer.play();
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Não foi possível carregar o áudio.')));
-              }
-            }
-          },
-        ),
-        const SizedBox(height: 40),
-        ...step.options.map((option) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ElevatedButton(
-              onPressed: _showFeedback
-                  ? null
-                  : () => _onAnswerSubmitted(option == step.correctAnswer),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              child: Text(option, style: const TextStyle(fontSize: 18)),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildFeedbackBar(int totalSteps) {
-    final bool isCorrect = _isCorrect ?? false;
-    final userLives = context.watch<UserSession>().currentUser?.lives ?? 0;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: isCorrect ? Colors.green.withAlpha(50) : Colors.red.withAlpha(50),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              isCorrect ? 'Correto!' : 'Ops! Tente novamente.',
-              style: TextStyle(
-                color: isCorrect ? Colors.green.shade200 : Colors.red.shade200,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          if (isCorrect)
-            ElevatedButton(
-              onPressed: () => _nextStep(totalSteps),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade600,
-              ),
-              child: Text(_currentStepIndex < totalSteps - 1
-                  ? 'Continuar'
-                  : 'Finalizar Lição'),
-            )
-          else if (userLives > 0)
-            ElevatedButton(
-              onPressed: _resetStep,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-              ),
-              child: const Text('Tentar Novamente'),
-            )
-          else
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-              ),
-              child: const Text('Sair da Lição'),
-            ),
         ],
       ),
     );

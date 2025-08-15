@@ -1,39 +1,39 @@
-// lib/features/practice/presentation/view/melodic_perception_list_screen.dart
+// lib/features/practice/presentation/view/harmonic_progression_list_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
-import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
+import 'package:musilingo/app/data/models/harmonic_progression_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
-import 'package:musilingo/features/practice/presentation/view/melodic_perception_exercise_screen.dart';
+import 'package:musilingo/features/practice/presentation/view/harmonic_progression_exercise_screen.dart'; // <-- NOVO IMPORT
 import 'package:musilingo/features/practice/presentation/widgets/exercise_node_widget.dart';
 
-class MelodicPerceptionListScreen extends StatefulWidget {
-  const MelodicPerceptionListScreen({super.key});
+class HarmonicProgressionListScreen extends StatefulWidget {
+  const HarmonicProgressionListScreen({super.key});
 
   @override
-  State<MelodicPerceptionListScreen> createState() =>
-      _MelodicPerceptionListScreenState();
+  State<HarmonicProgressionListScreen> createState() =>
+      _HarmonicProgressionListScreenState();
 }
 
-class _MelodicPerceptionListScreenState
-    extends State<MelodicPerceptionListScreen> {
-  late Future<List<MelodicExercise>> _exercisesFuture;
+class _HarmonicProgressionListScreenState
+    extends State<HarmonicProgressionListScreen> {
+  late Future<List<HarmonicProgression>> _exercisesFuture;
   final DatabaseService _databaseService = DatabaseService();
 
   @override
   void initState() {
     super.initState();
-    _exercisesFuture = _databaseService.getMelodicExercises();
+    _exercisesFuture = _databaseService.getHarmonicProgressions();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Percepção Melódica'),
+        title: const Text('Progressões Harmônicas'),
         backgroundColor: AppColors.background,
       ),
-      body: FutureBuilder<List<MelodicExercise>>(
+      body: FutureBuilder<List<HarmonicProgression>>(
         future: _exercisesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -49,7 +49,7 @@ class _MelodicPerceptionListScreenState
 
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(
-              child: Text('Nenhum exercício encontrado.'),
+              child: Text('Nenhum exercício de progressão encontrado.'),
             );
           }
 
@@ -76,7 +76,7 @@ class _MelodicPerceptionListScreenState
   }
 
   List<Widget> _buildExerciseNodes(
-      List<MelodicExercise> exercises, double spacing) {
+      List<HarmonicProgression> exercises, double spacing) {
     return List.generate(exercises.length, (index) {
       final exercise = exercises[index];
       return Positioned(
@@ -84,11 +84,12 @@ class _MelodicPerceptionListScreenState
         child: ExerciseNodeWidget(
           title: exercise.title,
           difficulty: exercise.difficulty,
-          icon: Icons.music_note, // Ícone específico para melodia
+          icon: Icons.format_list_numbered,
           onTap: () {
+            // --- NAVEGAÇÃO FINAL IMPLEMENTADA ---
             Navigator.of(context).push(MaterialPageRoute(
               builder: (context) =>
-                  MelodicPerceptionExerciseScreen(exercise: exercise),
+                  HarmonicProgressionExerciseScreen(exercise: exercise),
             ));
           },
         ),

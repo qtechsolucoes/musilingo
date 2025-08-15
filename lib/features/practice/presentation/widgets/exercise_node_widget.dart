@@ -2,15 +2,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
-import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 
 class ExerciseNodeWidget extends StatelessWidget {
-  final MelodicExercise exercise;
+  final String title;
+  final int difficulty;
+  final IconData icon; // Parâmetro de ícone adicionado
   final VoidCallback onTap;
 
   const ExerciseNodeWidget({
     super.key,
-    required this.exercise,
+    required this.title,
+    required this.difficulty,
+    required this.icon,
     required this.onTap,
   });
 
@@ -19,7 +22,7 @@ class ExerciseNodeWidget extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 220, // Um pouco mais largo para caber o título
+        width: 220,
         height: 80,
         decoration: BoxDecoration(
           color: AppColors.card,
@@ -36,7 +39,7 @@ class ExerciseNodeWidget extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.music_note, size: 32, color: AppColors.accent),
+            Icon(icon, size: 32, color: AppColors.accent), // Ícone dinâmico
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -44,7 +47,7 @@ class ExerciseNodeWidget extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    exercise.title,
+                    title,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -53,7 +56,7 @@ class ExerciseNodeWidget extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    'Dificuldade: ${exercise.difficulty}',
+                    'Dificuldade: $difficulty',
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,
