@@ -206,16 +206,19 @@ class _MelodicPerceptionExerciseScreenState
     super.dispose();
   }
 
-  Future<void> _playExerciseMelody() async {
+  // NOVA FUNÇÃO GENÉRICA DE PLAYBACK
+  Future<void> _playSequence(List<String> sequence) async {
     if (!_isSoundfontReady ||
         _instrumentSoundfontId == null ||
         _percussionSoundfontId == null) {
       return;
     }
+
     final int bpm = widget.exercise.tempo;
     final double beatDurationMs = 60000.0 / bpm;
     final timeSignatureParts = widget.exercise.timeSignature.split('/');
     final beatsPerMeasure = int.parse(timeSignatureParts[0]);
+
     for (int i = 0; i < beatsPerMeasure; i++) {
       _beatCountNotifier.value = i + 1;
       _midiPro.playNote(
@@ -225,14 +228,16 @@ class _MelodicPerceptionExerciseScreenState
           velocity: (i == 0) ? 127 : 100);
       await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
     }
+
     int currentBeat = 0;
-    for (String noteData in widget.exercise.correctSequence) {
+    for (String noteData in sequence) {
       final parts = noteData.split('_');
       final noteName = parts[0];
       final durationName = parts[1];
       final midiNote = MusicUtils.noteNameToMidi(noteName);
       final beatDurationMultiplier =
           MusicUtils.figureDurations[durationName] ?? 1.0;
+
       if (_isMetronomeEnabled) {
         _beatCountNotifier.value = (currentBeat % beatsPerMeasure) + 1;
         _midiPro.playNote(
@@ -248,7 +253,9 @@ class _MelodicPerceptionExerciseScreenState
             key: midiNote,
             velocity: 127);
       }
+
       await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
+
       for (int i = 1; i < beatDurationMultiplier; i++) {
         if (_isMetronomeEnabled) {
           _beatCountNotifier.value = ((currentBeat + i) % beatsPerMeasure) + 1;
@@ -260,15 +267,20 @@ class _MelodicPerceptionExerciseScreenState
         }
         await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
       }
+
       if (!noteName.contains("rest")) {
         _midiPro.stopNote(
             sfId: _instrumentSoundfontId!, channel: 0, key: midiNote);
       }
       currentBeat += beatDurationMultiplier.round();
     }
+
     await Future.delayed(const Duration(milliseconds: 500));
     _beatCountNotifier.value = 0;
   }
+
+  void _playExerciseMelody() => _playSequence(widget.exercise.correctSequence);
+  void _playUserSequence() => _playSequence(_userSequence);
 
   void _addRest() {
     if (_isVerified) return;
@@ -302,18 +314,30 @@ class _MelodicPerceptionExerciseScreenState
   void _renderUserSequence(
       {String Function(String note, bool isCorrect)? colorizer}) {
     if (!_isWebViewReady) return;
-    final timeSignature = widget.exercise.timeSignature;
-    final beatsPerMeasure = int.parse(timeSignature.split('/')[0]);
-    final beatType = int.parse(timeSignature.split('/')[1]);
+    final timeSignatureParts = widget.exercise.timeSignature.split('/');
+    final beatsPerMeasure = double.parse(timeSignatureParts[0]);
+    final beatType = double.parse(timeSignatureParts[1]);
+    final measureCapacity = beatsPerMeasure * (4.0 / beatType);
     StringBuffer measuresXml = StringBuffer();
-    measuresXml.write('<measure number="1">');
+    int measureCount = 1;
+    double currentMeasureDuration = 0.0;
+    measuresXml.write('<measure number="$measureCount">');
     measuresXml.write(
-        '<attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>$beatsPerMeasure</beats><beat-type>$beatType</beat-type></time><clef><sign>${widget.exercise.clef == 'treble' ? 'G' : 'F'}</sign><line>${widget.exercise.clef == 'treble' ? '2' : '4'}</line></clef></attributes>');
+        '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>${beatsPerMeasure.toInt()}</beats><beat-type>${beatType.toInt()}</beat-type></time><clef><sign>${widget.exercise.clef == 'treble' ? 'G' : 'F'}</sign><line>${widget.exercise.clef == 'treble' ? '2' : '4'}</line></clef></attributes>');
     for (var entry in _userSequence.asMap().entries) {
       final index = entry.key;
       final noteData = entry.value.split('_');
       final noteName = noteData[0];
       final figure = noteData[1];
+      final noteDuration =
+          (MusicUtils.figureDurations[figure] ?? 0.0) * (4.0 / beatType);
+      if (currentMeasureDuration + noteDuration > measureCapacity + 0.001) {
+        measuresXml.write('</measure>');
+        measureCount++;
+        measuresXml.write('<measure number="$measureCount">');
+        currentMeasureDuration = 0;
+      }
+      currentMeasureDuration += noteDuration;
       String colorTag = "";
       if (colorizer != null) {
         final isCorrect = index < widget.exercise.correctSequence.length &&
@@ -321,32 +345,28 @@ class _MelodicPerceptionExerciseScreenState
         colorTag = colorizer(entry.value, isCorrect);
       }
       final type = figure;
+      final xmlDuration = (MusicUtils.figureDurations[figure]! * 4).toInt();
       if (noteName.contains("rest")) {
         measuresXml.write(
-            '<note $colorTag><rest/><duration>1</duration><type>$type</type></note>');
+            '<note $colorTag><rest/><duration>$xmlDuration</duration><type>$type</type></note>');
       } else {
         String step = noteName.substring(0, 1);
         final octave = noteName.substring(noteName.length - 1);
         String alter = "0";
         String accidental = "";
         if (noteName.contains("#")) {
-          step = noteName.substring(0, 1);
           alter = "1";
           accidental = "<accidental>sharp</accidental>";
         } else if (noteName.contains("b")) {
-          step = noteName.substring(0, 1);
           alter = "-1";
           accidental = "<accidental>flat</accidental>";
         }
         measuresXml.write(
-            """<note $colorTag><pitch><step>$step</step><alter>$alter</alter><octave>$octave</octave></pitch><duration>1</duration><type>$type</type>$accidental</note>""");
+            """<note $colorTag><pitch><step>$step</step><alter>$alter</alter><octave>$octave</octave></pitch><duration>$xmlDuration</duration><type>$type</type>$accidental</note>""");
       }
     }
-
-    // CORREÇÃO DA BARRA DE COMPASSO FINAL
     measuresXml.write(
         '<barline location="right"><bar-style>light-heavy</bar-style></barline>');
-
     measuresXml.write('</measure>');
     final fullXml =
         """<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise><part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list><part id="P1">${measuresXml.toString()}</part></score-partwise>""";
@@ -363,6 +383,7 @@ class _MelodicPerceptionExerciseScreenState
             'color="${isCorrect ? AppColors.completedHex : AppColors.errorHex}"');
     if (isCorrect) {
       userSession.answerCorrectly();
+      userSession.recordPractice();
       _showSuccessDialog();
     } else {
       userSession.answerWrongly();
@@ -496,10 +517,16 @@ class _MelodicPerceptionExerciseScreenState
             onPressed: () =>
                 setState(() => _isMetronomeEnabled = !_isMetronomeEnabled),
           ),
+          // BOTÃO PARA OUVIR O DESAFIO
           IconButton(
               icon: const Icon(Icons.hearing),
-              tooltip: "Ouvir a melodia",
+              tooltip: "Ouvir o desafio",
               onPressed: _isVerified ? null : _playExerciseMelody),
+          // NOVO BOTÃO PARA OUVIR A RESPOSTA DO USUÁRIO
+          IconButton(
+              icon: const Icon(Icons.play_circle_outline),
+              tooltip: "Ouvir sua resposta",
+              onPressed: _isVerified ? null : _playUserSequence),
           if (_isVerified)
             IconButton(
               icon: const Icon(Icons.refresh),

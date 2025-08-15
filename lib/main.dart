@@ -1,6 +1,7 @@
 // lib/main.dart
 
-import 'package:flutter/material.dart'; // CORREÇÃO: 'package:flutter/material.dart'
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Importe o pacote
 import 'package:google_fonts/google_fonts.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/presentation/view/splash_screen.dart';
@@ -11,10 +12,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Carrega as variáveis de ambiente do ficheiro .env
+  await dotenv.load(fileName: ".env");
+
   await Supabase.initialize(
-    url: 'https://onsscmecztzhybfdjewo.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9uc3NjbWVjenR6aHliZmRqZXdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5OTExNDgsImV4cCI6MjA3MDU2NzE0OH0.hlcHLlgPGHSHevdllh6AVOkEe-GOphLEDhY-FY5H9Q8',
+    // Usa as variáveis carregadas de forma segura
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
   runApp(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/home/presentation/view/home_screen.dart';
+import 'package:musilingo/features/leagues/presentation/view/leagues_screen.dart'; // <-- NOVO IMPORT
 import 'package:musilingo/features/practice/presentation/view/practice_screen.dart';
 import 'package:musilingo/features/profile/presentation/view/profile_screen.dart';
 import 'package:provider/provider.dart';
@@ -18,12 +19,11 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
-  // O MÉTODO initState() FOI COMPLETAMENTE REMOVIDO DESTA CLASSE.
-  // A tela agora assume que o UserSession já está carregado quando ela é exibida.
-
+  // LISTA DE TELAS ATUALIZADA
   static const List<Widget> _widgetOptions = <Widget>[
     HomeScreen(),
     PracticeScreen(),
+    LeaguesScreen(), // <-- NOVA TELA ADICIONADA
     ProfileScreen(),
   ];
 
@@ -37,9 +37,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     final userSession = context.watch<UserSession>();
 
-    // Esta lógica de carregamento e erro é mantida como uma salvaguarda,
-    // mas idealmente não será mais acionada no fluxo normal, pois a SplashScreen
-    // já garante que os dados estejam prontos.
     if (userSession.isLoading) {
       return const Scaffold(
         body: Center(
@@ -61,7 +58,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
-              'Ocorreu um problema:\n${userSession.errorMessage}\n\nPor favor, reinicie o aplicativo e verifique sua conexão.',
+              'Ocorreu um problema:\n${userSession.errorMessage}\n\nPor favor, reinicie a aplicação e verifique a sua ligação.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textSecondary),
             ),
@@ -74,7 +71,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       body: Center(
         child: _widgetOptions.elementAt(_selectedIndex),
       ),
+      // BARRA DE NAVEGAÇÃO ATUALIZADA
       bottomNavigationBar: BottomNavigationBar(
+        // Adicionado para garantir que todos os itens apareçam
+        type: BottomNavigationBarType.fixed,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.school),
@@ -83,6 +83,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.music_note),
             label: 'Prática',
+          ),
+          // NOVO ITEM DA BARRA DE NAVEGAÇÃO
+          BottomNavigationBarItem(
+            icon: Icon(Icons.emoji_events), // Ícone de troféu
+            label: 'Ligas',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),

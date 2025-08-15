@@ -6,7 +6,6 @@ import 'package:musilingo/app/data/models/lesson_model.dart';
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/main.dart';
-// --- CORREÇÃO: A importação agora é válida pois a dependência está no pubspec.yaml ---
 import 'package:just_audio/just_audio.dart';
 import 'package:collection/collection.dart';
 import 'package:musilingo/app/services/user_session.dart';
@@ -28,7 +27,7 @@ class _LessonScreenState extends State<LessonScreen> {
   bool? _isCorrect;
   bool _showFeedback = false;
   final DatabaseService _databaseService = DatabaseService();
-  final AudioPlayer _audioPlayer = AudioPlayer(); // Agora válido
+  final AudioPlayer _audioPlayer = AudioPlayer();
   late ConfettiController _confettiController;
 
   List<String> _currentDragItems = [];
@@ -101,6 +100,8 @@ class _LessonScreenState extends State<LessonScreen> {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
         await _databaseService.markLessonAsCompleted(userId, widget.lesson.id);
+        // CHAMA A LÓGICA DE OFENSIVAS
+        await userSession.recordPractice();
       }
 
       await _showLessonCompleteDialog(10, user?.lives ?? 0);
@@ -110,9 +111,6 @@ class _LessonScreenState extends State<LessonScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... O restante do arquivo `lesson_screen.dart` permanece o mesmo ...
-    // (Ele é longo e não precisa de mais alterações, então vou omiti-lo por brevidade)
-    // Apenas certifique-se de que a importação do 'just_audio' está lá como mostrado acima.
     final userLives = context.watch<UserSession>().currentUser?.lives ?? 0;
 
     return Scaffold(
@@ -121,7 +119,6 @@ class _LessonScreenState extends State<LessonScreen> {
         backgroundColor: AppColors.background,
         elevation: 0,
       ),
-      // Stack permite sobrepor o widget de confete sobre a tela
       body: Stack(
         children: [
           FutureBuilder<List<LessonStep>>(
@@ -173,7 +170,6 @@ class _LessonScreenState extends State<LessonScreen> {
               );
             },
           ),
-          // Widget de confete alinhado no topo para o efeito de explosão
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
@@ -454,7 +450,6 @@ class _LessonScreenState extends State<LessonScreen> {
           icon: const Icon(Icons.play_circle_fill, color: AppColors.accent),
           iconSize: 80,
           onPressed: () async {
-            // Verifica se a URL não está vazia antes de tentar tocar
             if (step.audioUrl.isEmpty) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -465,8 +460,7 @@ class _LessonScreenState extends State<LessonScreen> {
             }
 
             try {
-              await _audioPlayer.setUrl(
-                  step.audioUrl); // <--- CORRETO: Usa a URL do exercício
+              await _audioPlayer.setUrl(step.audioUrl);
               _audioPlayer.play();
             } catch (e) {
               if (mounted) {

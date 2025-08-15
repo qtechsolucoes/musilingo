@@ -8,6 +8,10 @@ class UserProfile {
   int lives;
   int correctAnswers;
   int wrongAnswers;
+  int currentStreak;
+  DateTime? lastPracticeDate;
+  // NOVO CAMPO PARA A LIGA
+  String league;
 
   UserProfile({
     required this.id,
@@ -17,6 +21,9 @@ class UserProfile {
     required this.lives,
     required this.correctAnswers,
     required this.wrongAnswers,
+    required this.currentStreak,
+    this.lastPracticeDate,
+    required this.league,
   });
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
@@ -28,6 +35,12 @@ class UserProfile {
       lives: map['lives'] ?? 5,
       correctAnswers: map['correct_answers'] ?? 0,
       wrongAnswers: map['wrong_answers'] ?? 0,
+      currentStreak: map['current_streak'] ?? 0,
+      lastPracticeDate: map['last_practice_date'] != null
+          ? DateTime.parse(map['last_practice_date'])
+          : null,
+      // Lendo o novo campo do mapa
+      league: map['league'] ?? 'Bronze',
     );
   }
 }

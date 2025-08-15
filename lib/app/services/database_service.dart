@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:musilingo/app/data/models/module_model.dart';
 import 'package:musilingo/app/data/models/user_profile_model.dart';
+import 'package:musilingo/app/data/models/weekly_xp_model.dart'; // <-- NOVO IMPORT
 import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/main.dart';
@@ -37,7 +38,6 @@ class DatabaseService {
     return modules;
   }
 
-  // MÉTODO RESTAURADO
   Future<Set<int>> getCompletedLessonIds(String userId) async {
     final response = await supabase
         .from('completed_lessons')
@@ -46,7 +46,6 @@ class DatabaseService {
     return (response as List).map((data) => data['lesson_id'] as int).toSet();
   }
 
-  // MÉTODO RESTAURADO
   Future<List<LessonStep>> getStepsForLesson(int lessonId) async {
     final response = await supabase
         .from('lesson_steps')
@@ -56,7 +55,6 @@ class DatabaseService {
     return (response as List).map((data) => LessonStep.fromMap(data)).toList();
   }
 
-  // MÉTODO RESTAURADO
   Future<void> markLessonAsCompleted(String userId, int lessonId) async {
     _cachedModules = null;
     _lastFetchTime = null;
@@ -93,6 +91,8 @@ class DatabaseService {
         'id': user.id,
         'full_name': user.userMetadata?['full_name'] ?? 'Músico Anônimo',
         'avatar_url': user.userMetadata?['avatar_url'],
+        'league':
+            'Bronze', // Garante que novos utilizadores começam na liga Bronze
       };
       await supabase.from('profiles').insert(newProfileData);
 
@@ -100,25 +100,33 @@ class DatabaseService {
     }
   }
 
+  // ATUALIZADO para incluir o campo 'league'
   Future<void> updateStats({
     required String userId,
     int? points,
     int? lives,
     int? correctAnswers,
     int? wrongAnswers,
+    int? currentStreak,
+    String? lastPracticeDate,
+    String? league, // <-- NOVO PARÂMETRO
   }) async {
     final updates = <String, dynamic>{};
     if (points != null) updates['points'] = points;
     if (lives != null) updates['lives'] = lives;
     if (correctAnswers != null) updates['correct_answers'] = correctAnswers;
     if (wrongAnswers != null) updates['wrong_answers'] = wrongAnswers;
+    if (currentStreak != null) updates['current_streak'] = currentStreak;
+    if (lastPracticeDate != null) {
+      updates['last_practice_date'] = lastPracticeDate;
+    }
+    if (league != null) updates['league'] = league; // <-- NOVA LINHA
 
     if (updates.isNotEmpty) {
       await supabase.from('profiles').update(updates).eq('id', userId);
     }
   }
 
-  // MÉTODO RESTAURADO
   Future<String> uploadAvatar(String userId, File image) async {
     final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
     final bucket = supabase.storage.from('lesson_assets');
@@ -130,7 +138,6 @@ class DatabaseService {
     return publicUrl;
   }
 
-  // MÉTODO RESTAURADO
   Future<List<MelodicExercise>> getMelodicExercises() async {
     final response = await supabase
         .from('practice_melodies')
@@ -141,5 +148,35 @@ class DatabaseService {
     return (response as List)
         .map((data) => MelodicExercise.fromMap(data))
         .toList();
+  }
+
+  // --- NOVAS FUNÇÕES PARA AS LIGAS ---
+
+  /// Adiciona pontos ao XP semanal de um utilizador.
+  /// Usa um procedimento da base de dados (RPC) para garantir que a operação é atómica.
+  Future<void> upsertWeeklyXp(String userId, int pointsToAdd) async {
+    await supabase.rpc('upsert_weekly_xp', params: {
+      'p_user_id': userId,
+      'p_xp_to_add': pointsToAdd,
+    });
+  }
+
+  /// Vai buscar o ranking da liga de um determinado utilizador.
+  Future<List<WeeklyXp>> getLeagueLeaderboard(String userLeague) async {
+    // Esta query é mais complexa:
+    // 1. Seleciona todos os campos da tabela 'weekly_xp'
+    // 2. Junta (`inner join`) com a tabela 'profiles' para obter os dados do perfil
+    // 3. Filtra para trazer apenas os utilizadores da mesma liga que o jogador atual
+    // 4. Ordena por XP descendente (quem tem mais pontos aparece primeiro)
+    // 5. Limita o resultado aos 30 melhores para manter os grupos pequenos
+    final response = await supabase
+        .from('weekly_xp')
+        .select(
+            '*, profiles!inner(*)') // !inner garante que só vêm resultados com perfil correspondente
+        .eq('profiles.league', userLeague)
+        .order('xp', ascending: false)
+        .limit(30);
+
+    return (response as List).map((data) => WeeklyXp.fromMap(data)).toList();
   }
 }

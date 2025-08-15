@@ -6,11 +6,10 @@ import 'package:musilingo/app/data/models/lesson_model.dart';
 import 'package:musilingo/app/presentation/view/splash_screen.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
-import 'package:musilingo/features/home/presentation/widgets/world_widget.dart'; // Importa o novo widget
+import 'package:musilingo/features/home/presentation/widgets/world_widget.dart';
 import 'package:musilingo/main.dart';
 import 'package:provider/provider.dart';
 
-// A classe World continua aqui pois define a estrutura de dados da tela
 class World {
   final int index;
   final List<Lesson> lessons;
@@ -35,10 +34,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<Map<String, dynamic>> _fetchHomeData() async {
-    // Esta função permanece a mesma, pois é a fonte de dados da tela.
     try {
       final userId = supabase.auth.currentUser?.id;
-      if (userId == null) throw 'Usuário não autenticado.';
+      if (userId == null) throw 'Utilizador não autenticado.';
 
       final modules = await _databaseService.getModulesAndLessons();
       final completedLessonIds =
@@ -87,6 +85,14 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Trilha de Aprendizagem',
             style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          Row(children: [
+            const Icon(Icons.local_fire_department, color: Colors.orangeAccent),
+            const SizedBox(width: 4),
+            Text(user?.currentStreak.toString() ?? '0',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 16),
+          ]),
           Row(children: [
             const Icon(Icons.favorite, color: AppColors.primary),
             const SizedBox(width: 4),
@@ -167,12 +173,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final pageController = PageController(initialPage: initialWorldIndex);
 
-          // AQUI ESTÁ A MUDANÇA PRINCIPAL!
-          // O PageView.builder agora instancia o WorldWidget, muito mais limpo.
           return PageView.builder(
             controller: pageController,
-            physics:
-                const NeverScrollableScrollPhysics(), // A rolagem entre mundos é feita pelo botão
+            physics: const NeverScrollableScrollPhysics(),
             itemCount: worlds.length,
             itemBuilder: (context, index) {
               final world = worlds[index];
@@ -181,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 completedLessonIds: completedLessonIds,
                 isLastWorld: index == worlds.length - 1,
                 pageController: pageController,
-                onLessonCompleted: _refreshData, // Passa a função de callback
+                onLessonCompleted: _refreshData,
               );
             },
           );
