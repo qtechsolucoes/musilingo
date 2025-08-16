@@ -3,79 +3,99 @@
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
+import 'package:musilingo/app/services/sfx_service.dart';
+import 'package:musilingo/features/lesson/presentation/view/lesson_screen.dart';
 
-enum LessonStatus { locked, unlocked, completed }
+enum NodePosition { start, middle, end }
 
 class LessonNodeWidget extends StatelessWidget {
   final Lesson lesson;
-  final LessonStatus status;
-  final VoidCallback onTap;
+  final bool isCompleted;
+  final bool isLocked;
+  final NodePosition position;
+  final VoidCallback? onLessonCompleted;
 
   const LessonNodeWidget({
     super.key,
     required this.lesson,
-    required this.status,
-    required this.onTap,
+    required this.isCompleted,
+    required this.isLocked,
+    this.position = NodePosition.middle,
+    this.onLessonCompleted,
   });
 
   @override
   Widget build(BuildContext context) {
-    Color backgroundColor;
-    IconData iconData;
-    Color iconColor = Colors.white;
-    bool isEnabled = status != LessonStatus.locked;
+    Color nodeColor;
+    IconData nodeIcon;
 
-    switch (status) {
-      case LessonStatus.locked:
-        backgroundColor = Colors.grey[800]!;
-        iconData = Icons.lock;
-        iconColor = Colors.white.withAlpha(179);
-        break;
-      case LessonStatus.unlocked:
-        backgroundColor = AppColors.primary;
-        iconData = Icons.music_note;
-        break;
-      case LessonStatus.completed:
-        // *** USANDO A NOVA COR DE SUCESSO ***
-        backgroundColor = AppColors.completed;
-        iconData = Icons.check;
-        break;
+    if (isLocked) {
+      nodeColor = AppColors.card;
+      nodeIcon = Icons.lock;
+    } else if (isCompleted) {
+      nodeColor = AppColors.completed;
+      nodeIcon = Icons.check;
+    } else {
+      nodeColor = AppColors.accent;
+      nodeIcon = Icons.play_arrow;
     }
 
     return GestureDetector(
-      onTap: isEnabled ? onTap : null,
-      child: Container(
-        width: 100,
-        height: 100,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(102),
-              blurRadius: 10.0,
-              spreadRadius: 1.0,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
+      onTap: isLocked
+          ? null
+          : () {
+              SfxService.instance.playClick();
+              Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LessonScreen(lesson: lesson),
+                ),
+              ).then((completed) {
+                if (completed == true && onLessonCompleted != null) {
+                  onLessonCompleted!();
+                }
+              });
+            },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(iconData, size: 36, color: iconColor),
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: nodeColor,
+                border: Border.all(
+                  color: isLocked ? Colors.grey.shade700 : nodeColor,
+                  width: 4,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: nodeColor.withAlpha(
+                        (255 * 0.5).round()), // Correção de 'withOpacity'
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Icon(nodeIcon,
+                  color: isLocked ? Colors.grey.shade400 : Colors.white,
+                  size: 35),
+            ),
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            SizedBox(
+              width: 90,
               child: Text(
                 lesson.title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isLocked ? Colors.grey.shade500 : Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

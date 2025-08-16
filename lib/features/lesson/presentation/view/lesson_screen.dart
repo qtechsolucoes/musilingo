@@ -7,6 +7,7 @@ import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/main.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
@@ -61,8 +62,10 @@ class _LessonScreenState extends State<LessonScreen> {
     final userSession = Provider.of<UserSession>(context, listen: false);
 
     if (isCorrect) {
+      SfxService.instance.playSuccess();
       userSession.answerCorrectly();
     } else {
+      SfxService.instance.playError();
       userSession.answerWrongly();
       final livesLeft = userSession.currentUser?.lives ?? 0;
       if (mounted) {

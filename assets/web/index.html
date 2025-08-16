@@ -1,29 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSMD Renderer</title>
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #0f0f2d; /* Cor de fundo do app */
-            /* --- CORREÇÃO: Permite a rolagem vertical se necessário --- */
-            overflow-y: auto; 
-            overflow-x: hidden;
-        }
-        #osmd-container {
-            width: 100%;
-            height: 100%;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Musilingo Score</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      /* --- MUDANÇA DE SCROLL APLICADA AQUI --- */
+      overflow-x: hidden; /* Desabilita scroll horizontal */
+      overflow-y: auto;   /* Habilita scroll vertical quando necessário */
+      background-color: transparent !important;
+    }
+
+    /* --- CSS DE POSICIONAMENTO REMOVIDO PARA FLUXO NATURAL --- */
+    #score-container {
+      width: 100%;
+      padding-top: 1px; /* Garante que o conteúdo comece do topo absoluto */
+    }
+  </style>
 </head>
 <body>
-    <div id="osmd-container"></div>
-    <script src="./js/opensheetmusicdisplay.min.js"></script>
-    <script src="./js/main.js"></script>
+  <div id="score-container"></div>
+
+  <script src="js/opensheetmusicdisplay.min.js"></script>
+  <script>
+    let osmd;
+    
+    function initializeOSMD() {
+      osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("score-container", {
+        backend: "svg",
+        defaultColorMusic: "#FFFFFF", 
+        drawCredits: false,
+        drawTitle: false,
+        drawSubtitle: false,
+        drawComposer: false,
+        drawLyricist: false,
+        drawMetronomeMarks: false,
+        drawPartNames: false,
+        drawPartAbbreviations: false,
+        drawMeasureNumbers: true,
+        autoResize: true,
+        stretchLastSystemLine: true,
+      });
+    }
+
+    window.loadScore = function(musicXml) {
+      if (!osmd) {
+        initializeOSMD();
+      }
+      osmd.load(musicXml)
+        .then(() => {
+          osmd.render();
+        })
+        .catch((error) => {
+          console.error("Error loading or rendering score:", error);
+          document.getElementById("score-container").innerText = "Error loading score.";
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        initializeOSMD();
+    });
+
+  </script>
 </body>
 </html>

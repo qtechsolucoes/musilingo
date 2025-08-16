@@ -167,7 +167,7 @@ class _MelodicPerceptionExerciseScreenState
     await _initializeAudio();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
+      ..setBackgroundColor(Colors.transparent)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (String url) {
@@ -206,7 +206,6 @@ class _MelodicPerceptionExerciseScreenState
     super.dispose();
   }
 
-  // NOVA FUNÇÃO GENÉRICA DE PLAYBACK
   Future<void> _playSequence(List<String> sequence) async {
     if (!_isSoundfontReady ||
         _instrumentSoundfontId == null ||
@@ -517,12 +516,10 @@ class _MelodicPerceptionExerciseScreenState
             onPressed: () =>
                 setState(() => _isMetronomeEnabled = !_isMetronomeEnabled),
           ),
-          // BOTÃO PARA OUVIR O DESAFIO
           IconButton(
               icon: const Icon(Icons.hearing),
               tooltip: "Ouvir o desafio",
               onPressed: _isVerified ? null : _playExerciseMelody),
-          // NOVO BOTÃO PARA OUVIR A RESPOSTA DO USUÁRIO
           IconButton(
               icon: const Icon(Icons.play_circle_outline),
               tooltip: "Ouvir sua resposta",
@@ -554,11 +551,12 @@ class _MelodicPerceptionExerciseScreenState
               children: [
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    // --- MUDANÇA DE PADDING APLICADA AQUI ---
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.white,
+                        color: AppColors.background,
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),

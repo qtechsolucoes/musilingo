@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart'; // Importe o pacote
 import 'package:google_fonts/google_fonts.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/presentation/view/splash_screen.dart';
+import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,6 +21,9 @@ Future<void> main() async {
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
+
+  // Carrega os efeitos sonoros na inicialização
+  await SfxService.instance.loadSounds();
 
   runApp(
     ChangeNotifierProvider(
