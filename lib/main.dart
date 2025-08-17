@@ -22,6 +22,7 @@ Future<void> main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
+  // ✅ ESTA LINHA ESTÁ NO LUGAR PERFEITO!
   // Carrega os efeitos sonoros na inicialização
   await SfxService.instance.loadSounds();
 

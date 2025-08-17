@@ -202,7 +202,6 @@ class _LessonScreenState extends State<LessonScreen> {
                         padding: const EdgeInsets.all(16.0),
                         child: ElevatedButton(
                           onPressed: () {
-                            SfxService.instance.playClick();
                             _checkDragAndDropAnswer(currentStep);
                           },
                           style: ElevatedButton.styleFrom(
@@ -253,23 +252,26 @@ class _LessonScreenState extends State<LessonScreen> {
   }
 
   Widget _buildExplanationWidget(ExplanationStep step) {
+    final bool hasImage = step.imageUrl != null && step.imageUrl!.isNotEmpty;
     return Column(
       children: [
         Expanded(
           child: SingleChildScrollView(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              // Lógica de centralização condicional
+              mainAxisAlignment:
+                  hasImage ? MainAxisAlignment.start : MainAxisAlignment.center,
               children: [
+                if (hasImage)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24.0),
+                    child: Image.network(step.imageUrl!),
+                  ),
                 Text(
                   step.text,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 22, height: 1.5),
                 ),
-                if (step.imageUrl != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16.0, bottom: 16.0),
-                    child: Image.network(step.imageUrl!),
-                  ),
               ],
             ),
           ),
@@ -291,192 +293,211 @@ class _LessonScreenState extends State<LessonScreen> {
   }
 
   Widget _buildMultipleChoiceWidget(MultipleChoiceQuestionStep step) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          step.questionText,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 40),
-        ...step.options.map((option) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ElevatedButton(
-              onPressed: _showFeedback
-                  ? null
-                  : () {
-                      SfxService.instance.playClick();
-                      _onAnswerSubmitted(option == step.correctAnswer);
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                minimumSize: const Size(double.infinity, 50),
+    // SingleChildScrollView para evitar overflow
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            step.questionText,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+          ...step.options.map((option) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: ElevatedButton(
+                onPressed: _showFeedback
+                    ? null
+                    : () {
+                        // Sem som de clique aqui
+                        _onAnswerSubmitted(option == step.correctAnswer);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: Text(option, style: const TextStyle(fontSize: 18)),
               ),
-              child: Text(option, style: const TextStyle(fontSize: 18)),
-            ),
-          );
-        }),
-      ],
+            );
+          }),
+        ],
+      ),
     );
   }
 
   Widget _buildDragAndDropWidget(DragAndDropStep step) {
-    return Column(
-      children: [
-        Text(
-          step.questionText,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  children: List.generate(step.correctOrder.length, (index) {
-                    return DragTarget<String>(
-                      builder: (context, candidateData, rejectedData) {
-                        return Container(
-                          height: 60,
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.card,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.primary),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 100,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: _dropTargetMatches[index] != null
-                                      ? AppColors.accent
-                                      : AppColors.primary,
-                                  borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(11),
-                                      bottomLeft: Radius.circular(11)),
-                                ),
-                                child: _dropTargetMatches[index] != null
-                                    ? Center(
-                                        child: Text(_dropTargetMatches[index]!,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: AppColors.background)))
-                                    : null,
-                              ),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8.0),
-                                  child: Text(step.correctOrder[index],
-                                      style: const TextStyle(
-                                          color: AppColors.textSecondary)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      onWillAcceptWithDetails: (details) =>
-                          !_dropTargetMatches.containsValue(details.data),
-                      onAcceptWithDetails: (details) {
-                        setState(() {
-                          _dropTargetMatches[index] = details.data;
-                          _dragSourceItems.remove(details.data);
-                        });
-                      },
-                    );
-                  }),
-                ),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: _dragSourceItems.map((item) {
-                    return Draggable<String>(
-                      data: item,
-                      feedback: Material(
-                        type: MaterialType.transparency,
-                        child: Chip(
-                            label: Text(item),
-                            backgroundColor: AppColors.accent,
-                            labelStyle: const TextStyle(
-                                color: AppColors.background,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                      childWhenDragging: Chip(
-                          label: Text(item), backgroundColor: AppColors.card),
-                      child: Chip(label: Text(item)),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
+    // SingleChildScrollView para evitar overflow
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            step.questionText,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
           ),
-        ),
-      ],
+          const SizedBox(height: 24),
+          // Barras de Destino
+          Column(
+            children: List.generate(step.correctOrder.length, (index) {
+              return DragTarget<String>(
+                builder: (context, candidateData, rejectedData) {
+                  return Container(
+                    height: 60,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: _dropTargetMatches[index] != null
+                                ? AppColors.accent
+                                : AppColors.primary,
+                            borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(11),
+                                bottomLeft: Radius.circular(11)),
+                          ),
+                          child: _dropTargetMatches[index] != null
+                              ? Center(
+                                  child: Text(
+                                  _dropTargetMatches[index]!,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.background),
+                                  textAlign: TextAlign.center,
+                                ))
+                              : null,
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12.0),
+                            child: Text(step.correctOrder[index],
+                                style: const TextStyle(
+                                    color: AppColors.textSecondary)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                onWillAcceptWithDetails: (details) =>
+                    !_dropTargetMatches.containsValue(details.data),
+                onAcceptWithDetails: (details) {
+                  setState(() {
+                    SfxService.instance.playClick(); // Click ao soltar
+                    _dropTargetMatches[index] = details.data;
+                    _dragSourceItems.remove(details.data);
+                  });
+                },
+              );
+            }),
+          ),
+          const SizedBox(height: 24),
+          const Divider(color: AppColors.primary, thickness: 1),
+          const SizedBox(height: 24),
+          // Barras de Origem
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8.0,
+            runSpacing: 8.0,
+            children: step.draggableItems.map((item) {
+              bool isItemVisible = _dragSourceItems.contains(item);
+              return Opacity(
+                opacity: isItemVisible ? 1.0 : 0.0,
+                child: Draggable<String>(
+                  data: item,
+                  feedback: Material(
+                    type: MaterialType.transparency,
+                    child: Chip(
+                        label: Text(item),
+                        backgroundColor: AppColors.accent,
+                        labelStyle: const TextStyle(
+                            color: AppColors.background,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                  childWhenDragging:
+                      Chip(label: Text(item), backgroundColor: AppColors.card),
+                  child: isItemVisible
+                      ? Chip(
+                          label: Text(item),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8))
+                      : const SizedBox.shrink(),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildEarTrainingWidget(EarTrainingStep step) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          step.text,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 40),
-        IconButton(
-          icon: const Icon(Icons.play_circle_fill, color: AppColors.accent),
-          iconSize: 80,
-          onPressed: () async {
-            SfxService.instance.playClick();
-            if (step.audioUrl.isEmpty) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content:
-                        Text('Áudio para este exercício não encontrado.')));
+    // SingleChildScrollView para evitar overflow
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            step.text,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+          IconButton(
+            icon: const Icon(Icons.play_circle_fill, color: AppColors.accent),
+            iconSize: 80,
+            onPressed: () async {
+              SfxService.instance.playClick();
+              if (step.audioUrl.isEmpty) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content:
+                          Text('Áudio para este exercício não encontrado.')));
+                }
+                return;
               }
-              return;
-            }
-            try {
-              await _audioPlayer.setUrl(step.audioUrl);
-              _audioPlayer.play();
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Não foi possível carregar o áudio.')));
+              try {
+                await _audioPlayer.setUrl(step.audioUrl);
+                _audioPlayer.play();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Não foi possível carregar o áudio.')));
+                }
               }
-            }
-          },
-        ),
-        const SizedBox(height: 40),
-        ...step.options.map((option) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: ElevatedButton(
-              onPressed: _showFeedback
-                  ? null
-                  : () {
-                      SfxService.instance.playClick();
-                      _onAnswerSubmitted(option == step.correctAnswer);
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                minimumSize: const Size(double.infinity, 50),
+            },
+          ),
+          const SizedBox(height: 40),
+          ...step.options.map((option) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: ElevatedButton(
+                onPressed: _showFeedback
+                    ? null
+                    : () {
+                        // Sem som de clique aqui
+                        _onAnswerSubmitted(option == step.correctAnswer);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: Text(option, style: const TextStyle(fontSize: 18)),
               ),
-              child: Text(option, style: const TextStyle(fontSize: 18)),
-            ),
-          );
-        }),
-      ],
+            );
+          }),
+        ],
+      ),
     );
   }
 
