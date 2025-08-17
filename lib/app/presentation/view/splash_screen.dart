@@ -79,14 +79,15 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.music_note, color: Colors.white, size: 80),
+                const Icon(Icons.music_note,
+                    color: Color.fromARGB(255, 240, 196, 25), size: 80),
                 const SizedBox(height: 20),
                 Text(
                   'Musilingo',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: const Color.fromARGB(255, 240, 196, 25),
                     shadows: [
                       Shadow(
                         blurRadius: 10.0,

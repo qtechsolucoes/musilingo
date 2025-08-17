@@ -7,6 +7,7 @@ import Foundation
 
 import app_links
 import audio_session
+import audioplayers_darwin
 import file_selector_macos
 import flutter_midi_pro
 import just_audio
@@ -18,6 +19,7 @@ import webview_flutter_wkwebview
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   AppLinksMacosPlugin.register(with: registry.registrar(forPlugin: "AppLinksMacosPlugin"))
   AudioSessionPlugin.register(with: registry.registrar(forPlugin: "AudioSessionPlugin"))
+  AudioplayersDarwinPlugin.register(with: registry.registrar(forPlugin: "AudioplayersDarwinPlugin"))
   FileSelectorPlugin.register(with: registry.registrar(forPlugin: "FileSelectorPlugin"))
   FlutterMidiProPlugin.register(with: registry.registrar(forPlugin: "FlutterMidiProPlugin"))
   JustAudioPlugin.register(with: registry.registrar(forPlugin: "JustAudioPlugin"))
