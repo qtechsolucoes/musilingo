@@ -9,6 +9,8 @@ import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
+import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/practice/presentation/widgets/melodic_input_panel.dart';
 import 'package:provider/provider.dart';
@@ -18,20 +20,20 @@ class MusicUtils {
   static const Map<String, int> _noteValues = {
     'C': 0,
     'C#': 1,
-    'DB': 1,
+    'Db': 1,
     'D': 2,
     'D#': 3,
-    'EB': 3,
+    'Eb': 3,
     'E': 4,
     'F': 5,
     'F#': 6,
-    'GB': 6,
+    'Gb': 6,
     'G': 7,
     'G#': 8,
-    'AB': 8,
+    'Ab': 8,
     'A': 9,
     'A#': 10,
-    'BB': 10,
+    'Bb': 10,
     'B': 11
   };
   static int noteNameToMidi(String noteName) {
@@ -278,8 +280,15 @@ class _MelodicPerceptionExerciseScreenState
     _beatCountNotifier.value = 0;
   }
 
-  void _playExerciseMelody() => _playSequence(widget.exercise.correctSequence);
-  void _playUserSequence() => _playSequence(_userSequence);
+  void _playExerciseMelody() {
+    SfxService.instance.playClick();
+    _playSequence(widget.exercise.correctSequence);
+  }
+
+  void _playUserSequence() {
+    SfxService.instance.playClick();
+    _playSequence(_userSequence);
+  }
 
   void _addRest() {
     if (_isVerified) return;
@@ -429,7 +438,10 @@ class _MelodicPerceptionExerciseScreenState
                 actionsAlignment: MainAxisAlignment.center,
                 actions: [
                   ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () {
+                        SfxService.instance.playClick();
+                        Navigator.of(context).pop();
+                      },
                       style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.completed),
                       child: const Text('Continuar'))
@@ -462,6 +474,7 @@ class _MelodicPerceptionExerciseScreenState
                 actions: [
                   TextButton(
                       onPressed: () {
+                        SfxService.instance.playClick();
                         Navigator.of(context).pop();
                         setState(() {
                           _userSequence = [];
@@ -482,163 +495,179 @@ class _MelodicPerceptionExerciseScreenState
   @override
   Widget build(BuildContext context) {
     if (!_isWebViewReady || !_isSoundfontReady) {
-      return Scaffold(
-          appBar: AppBar(
-              title: Text(widget.exercise.title),
-              backgroundColor: AppColors.background),
-          body: const Center(
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                CircularProgressIndicator(color: AppColors.accent),
-                SizedBox(height: 16),
-                Text("Carregando exercício...")
-              ])));
+      return GradientBackground(
+        child: Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+                title: Text(widget.exercise.title),
+                backgroundColor: Colors.transparent,
+                elevation: 0),
+            body: const Center(
+                child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                  CircularProgressIndicator(color: AppColors.accent),
+                  SizedBox(height: 16),
+                  Text("Carregando exercício...")
+                ]))),
+      );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.exercise.title),
-        backgroundColor: AppColors.background,
-        actions: [
-          IconButton(
-              icon: const Icon(Icons.undo),
-              tooltip: "Desfazer última nota",
-              onPressed: _isVerified ? null : _removeLastNote),
-          IconButton(
-            icon: SvgPicture.asset('assets/images/metronome.svg',
-                width: 24,
-                height: 24,
-                colorFilter: ColorFilter.mode(
-                    _isMetronomeEnabled ? AppColors.accent : Colors.white54,
-                    BlendMode.srcIn)),
-            tooltip: "Metrônomo",
-            onPressed: () =>
-                setState(() => _isMetronomeEnabled = !_isMetronomeEnabled),
-          ),
-          IconButton(
-              icon: const Icon(Icons.hearing),
-              tooltip: "Ouvir o desafio",
-              onPressed: _isVerified ? null : _playExerciseMelody),
-          IconButton(
-              icon: const Icon(Icons.play_circle_outline),
-              tooltip: "Ouvir sua resposta",
-              onPressed: _isVerified ? null : _playUserSequence),
-          if (_isVerified)
+    return GradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Text(widget.exercise.title),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          actions: [
             IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: "Tentar Novamente",
+                icon: const Icon(Icons.undo),
+                tooltip: "Desfazer última nota",
+                onPressed: _isVerified
+                    ? null
+                    : () {
+                        SfxService.instance.playClick();
+                        _removeLastNote();
+                      }),
+            IconButton(
+              icon: SvgPicture.asset('assets/images/metronome.svg',
+                  width: 24,
+                  height: 24,
+                  colorFilter: ColorFilter.mode(
+                      _isMetronomeEnabled ? AppColors.accent : Colors.white54,
+                      BlendMode.srcIn)),
+              tooltip: "Metrônomo",
               onPressed: () {
-                setState(() {
-                  _userSequence = [];
-                  _isVerified = false;
-                  _octaveOffset = 0;
-                  _currentAccidental = AccidentalType.none;
-                  _selectedNote = widget.exercise.notePalette.isNotEmpty
-                      ? widget.exercise.notePalette.first
-                      : 'C4';
-                  _selectedFigure = 'quarter';
-                });
-                _renderUserSequence();
+                SfxService.instance.playClick();
+                setState(() => _isMetronomeEnabled = !_isMetronomeEnabled);
               },
             ),
-        ],
-      ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                Expanded(
-                  child: Padding(
-                    // --- MUDANÇA DE PADDING APLICADA AQUI ---
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: AppColors.background,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: WebViewWidget(controller: _controller),
-                      ),
-                    ),
-                  ),
-                ),
-                MelodicInputPanel(
-                  notePalette: _octaveAdjustedNotePalette,
-                  figurePalette: _figureSymbols,
-                  restPalette: _restSymbols,
-                  selectedNote: _selectedNote,
-                  selectedFigure: _selectedFigure,
-                  isVerified: _isVerified,
-                  onNoteSelected: (note) => setState(() =>
-                      _selectedNote = note.replaceAll(RegExp(r'[0-9]'), '')),
-                  onFigureSelected: (figure) =>
-                      setState(() => _selectedFigure = figure),
-                  onAddNote: _addNoteToSequence,
-                  onAddRest: _addRest,
-                  onVerify: _verifyAnswer,
-                  displayOctave: _displayOctave,
-                  onOctaveUp: _onOctaveUp,
-                  onOctaveDown: _onOctaveDown,
-                  currentAccidental: _currentAccidental,
-                  onAccidentalSelected: _onAccidentalSelected,
-                ),
-              ],
-            ),
-            Positioned(
-              top: 24,
-              left: 24,
-              child: ValueListenableBuilder<int>(
-                valueListenable: _beatCountNotifier,
-                builder: (context, beat, child) {
-                  return AnimatedOpacity(
-                    opacity: beat == 0 ? 0.0 : 1.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withAlpha(200),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                                AppColors.accent.withAlpha((255 * 0.7).round()),
-                            blurRadius: 15.0,
-                            spreadRadius: 2.0,
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(beat.toString(),
-                            style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white)),
-                      ),
-                    ),
-                  );
+            IconButton(
+                icon: const Icon(Icons.hearing),
+                tooltip: "Ouvir o desafio",
+                onPressed: _isVerified ? null : _playExerciseMelody),
+            IconButton(
+                icon: const Icon(Icons.play_circle_outline),
+                tooltip: "Ouvir sua resposta",
+                onPressed: _isVerified ? null : _playUserSequence),
+            if (_isVerified)
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: "Tentar Novamente",
+                onPressed: () {
+                  SfxService.instance.playClick();
+                  setState(() {
+                    _userSequence = [];
+                    _isVerified = false;
+                    _octaveOffset = 0;
+                    _currentAccidental = AccidentalType.none;
+                    _selectedNote = widget.exercise.notePalette.isNotEmpty
+                        ? widget.exercise.notePalette.first
+                        : 'C4';
+                    _selectedFigure = 'quarter';
+                  });
+                  _renderUserSequence();
                 },
               ),
-            ),
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConfettiWidget(
-                confettiController: _confettiController,
-                blastDirectionality: BlastDirectionality.explosive,
-                shouldLoop: false,
-                colors: const [
-                  Colors.green,
-                  Colors.blue,
-                  Colors.pink,
-                  Colors.orange,
-                  Colors.purple
-                ],
-              ),
-            ),
           ],
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          // ignore: deprecated_member_use
+                          color: AppColors.background.withOpacity(0.5),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: WebViewWidget(controller: _controller),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 24,
+                      left: 24,
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: _beatCountNotifier,
+                        builder: (context, beat, child) {
+                          return AnimatedOpacity(
+                            opacity: beat == 0 ? 0.0 : 1.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withAlpha(200),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.accent
+                                        .withAlpha((255 * 0.7).round()),
+                                    blurRadius: 15.0,
+                                    spreadRadius: 2.0,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(beat.toString(),
+                                    style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white)),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: ConfettiWidget(
+                        confettiController: _confettiController,
+                        blastDirectionality: BlastDirectionality.explosive,
+                        shouldLoop: false,
+                        colors: const [
+                          Colors.green,
+                          Colors.blue,
+                          Colors.pink,
+                          Colors.orange,
+                          Colors.purple
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              MelodicInputPanel(
+                notePalette: _octaveAdjustedNotePalette,
+                figurePalette: _figureSymbols,
+                restPalette: _restSymbols,
+                selectedNote: _selectedNote,
+                selectedFigure: _selectedFigure,
+                isVerified: _isVerified,
+                onNoteSelected: (note) => setState(() =>
+                    _selectedNote = note.replaceAll(RegExp(r'[0-9]'), '')),
+                onFigureSelected: (figure) =>
+                    setState(() => _selectedFigure = figure),
+                onAddNote: _addNoteToSequence,
+                onAddRest: _addRest,
+                onVerify: _verifyAnswer,
+                displayOctave: _displayOctave,
+                onOctaveUp: _onOctaveUp,
+                onOctaveDown: _onOctaveDown,
+                currentAccidental: _currentAccidental,
+                onAccidentalSelected: _onAccidentalSelected,
+              ),
+            ],
+          ),
         ),
       ),
     );

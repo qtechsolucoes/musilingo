@@ -1,16 +1,17 @@
 // lib/features/lesson/presentation/view/lesson_screen.dart
 
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
-import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
 import 'package:musilingo/app/services/database_service.dart';
-import 'package:musilingo/main.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
+import 'package:musilingo/features/lesson/data/models/lesson_step_model.dart';
+import 'package:musilingo/main.dart';
 import 'package:provider/provider.dart';
-import 'package:confetti/confetti.dart';
 
 class LessonScreen extends StatefulWidget {
   final Lesson lesson;
@@ -29,10 +30,8 @@ class _LessonScreenState extends State<LessonScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   late ConfettiController _confettiController;
 
-  // ESTADO PARA O NOVO WIDGET DE ARRASTAR E SOLTAR
-  List<String> _dragSourceItems = []; // Itens que podem ser arrastados
-  final Map<int, String?> _dropTargetMatches =
-      {}; // Mapa do que foi solto em cada alvo
+  List<String> _dragSourceItems = [];
+  final Map<int, String?> _dropTargetMatches = {};
 
   @override
   void initState() {
@@ -62,7 +61,7 @@ class _LessonScreenState extends State<LessonScreen> {
     final userSession = Provider.of<UserSession>(context, listen: false);
 
     if (isCorrect) {
-      SfxService.instance.playSuccess();
+      SfxService.instance.playCorrectAnswer();
       userSession.answerCorrectly();
     } else {
       SfxService.instance.playError();
@@ -144,91 +143,98 @@ class _LessonScreenState extends State<LessonScreen> {
   Widget build(BuildContext context) {
     final userLives = context.watch<UserSession>().currentUser?.lives ?? 0;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.lesson.title),
-        backgroundColor: AppColors.background,
-        elevation: 0,
-      ),
-      body: Stack(
-        children: [
-          FutureBuilder<List<LessonStep>>(
-            future: _stepsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                    child: CircularProgressIndicator(color: AppColors.accent));
-              }
-              if (snapshot.hasError ||
-                  !snapshot.hasData ||
-                  snapshot.data!.isEmpty) {
-                return Center(
-                    child: Text(
-                        'Erro: ${snapshot.error ?? "Não foi possível carregar o conteúdo da lição."}'));
-              }
+    return GradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Text(widget.lesson.title),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: Stack(
+          children: [
+            FutureBuilder<List<LessonStep>>(
+              future: _stepsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.accent));
+                }
+                if (snapshot.hasError ||
+                    !snapshot.hasData ||
+                    snapshot.data!.isEmpty) {
+                  return Center(
+                      child: Text(
+                          'Erro: ${snapshot.error ?? "Não foi possível carregar o conteúdo da lição."}'));
+                }
 
-              final steps = snapshot.data!;
-              final currentStep = steps[_currentStepIndex];
-              final progress = (_currentStepIndex + 1) / steps.length;
+                final steps = snapshot.data!;
+                final currentStep = steps[_currentStepIndex];
+                final progress = (_currentStepIndex + 1) / steps.length;
 
-              if (currentStep is DragAndDropStep) {
-                _setupDragAndDropState(currentStep);
-              }
+                if (currentStep is DragAndDropStep) {
+                  _setupDragAndDropState(currentStep);
+                }
 
-              if (userLives <= 0 && !_showFeedback) {
-                return _buildGameOverWidget();
-              }
+                if (userLives <= 0 && !_showFeedback) {
+                  return _buildGameOverWidget();
+                }
 
-              return Column(
-                children: [
-                  LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: AppColors.card,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.completed),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: _buildStepWidget(currentStep),
+                return Column(
+                  children: [
+                    LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: AppColors.card,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          AppColors.completed),
                     ),
-                  ),
-                  if (currentStep is! DragAndDropStep && _showFeedback)
-                    _buildFeedbackBar(steps.length)
-                  else if (currentStep is DragAndDropStep && !_showFeedback)
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: ElevatedButton(
-                        onPressed: () => _checkDragAndDropAnswer(currentStep),
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.completed,
-                            minimumSize: const Size(double.infinity, 50)),
-                        child: const Text('Verificar',
-                            style: TextStyle(fontSize: 18)),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: _buildStepWidget(currentStep),
                       ),
-                    )
-                  else if (currentStep is DragAndDropStep && _showFeedback)
-                    _buildFeedbackBar(steps.length),
-                ],
-              );
-            },
-          ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-              confettiController: _confettiController,
-              blastDirectionality: BlastDirectionality.explosive,
-              shouldLoop: false,
-              colors: const [
-                Colors.green,
-                Colors.blue,
-                Colors.pink,
-                Colors.orange,
-                Colors.purple
-              ],
+                    ),
+                    if (currentStep is! DragAndDropStep && _showFeedback)
+                      _buildFeedbackBar(steps.length)
+                    else if (currentStep is DragAndDropStep && !_showFeedback)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            SfxService.instance.playClick();
+                            _checkDragAndDropAnswer(currentStep);
+                          },
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.completed,
+                              minimumSize: const Size(double.infinity, 50)),
+                          child: const Text('Verificar',
+                              style: TextStyle(fontSize: 18)),
+                        ),
+                      )
+                    else if (currentStep is DragAndDropStep && _showFeedback)
+                      _buildFeedbackBar(steps.length),
+                  ],
+                );
+              },
             ),
-          ),
-        ],
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConfettiWidget(
+                confettiController: _confettiController,
+                blastDirectionality: BlastDirectionality.explosive,
+                shouldLoop: false,
+                colors: const [
+                  Colors.green,
+                  Colors.blue,
+                  Colors.pink,
+                  Colors.orange,
+                  Colors.purple
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -270,6 +276,7 @@ class _LessonScreenState extends State<LessonScreen> {
         ),
         ElevatedButton(
           onPressed: () async {
+            SfxService.instance.playClick();
             final steps = await _stepsFuture;
             _nextStep(steps.length);
           },
@@ -299,7 +306,10 @@ class _LessonScreenState extends State<LessonScreen> {
             child: ElevatedButton(
               onPressed: _showFeedback
                   ? null
-                  : () => _onAnswerSubmitted(option == step.correctAnswer),
+                  : () {
+                      SfxService.instance.playClick();
+                      _onAnswerSubmitted(option == step.correctAnswer);
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 minimumSize: const Size(double.infinity, 50),
@@ -427,6 +437,7 @@ class _LessonScreenState extends State<LessonScreen> {
           icon: const Icon(Icons.play_circle_fill, color: AppColors.accent),
           iconSize: 80,
           onPressed: () async {
+            SfxService.instance.playClick();
             if (step.audioUrl.isEmpty) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -453,7 +464,10 @@ class _LessonScreenState extends State<LessonScreen> {
             child: ElevatedButton(
               onPressed: _showFeedback
                   ? null
-                  : () => _onAnswerSubmitted(option == step.correctAnswer),
+                  : () {
+                      SfxService.instance.playClick();
+                      _onAnswerSubmitted(option == step.correctAnswer);
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 minimumSize: const Size(double.infinity, 50),
@@ -488,7 +502,10 @@ class _LessonScreenState extends State<LessonScreen> {
           const SizedBox(width: 16),
           if (isCorrect)
             ElevatedButton(
-              onPressed: () => _nextStep(totalSteps),
+              onPressed: () {
+                SfxService.instance.playClick();
+                _nextStep(totalSteps);
+              },
               style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green.shade600),
               child: Text(_currentStepIndex < totalSteps - 1
@@ -497,14 +514,20 @@ class _LessonScreenState extends State<LessonScreen> {
             )
           else if (userLives > 0)
             ElevatedButton(
-              onPressed: _resetStep,
+              onPressed: () {
+                SfxService.instance.playClick();
+                _resetStep();
+              },
               style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red.shade600),
               child: const Text('Tentar Novamente'),
             )
           else
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                SfxService.instance.playClick();
+                Navigator.of(context).pop();
+              },
               style:
                   ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               child: const Text('Sair da Lição'),
@@ -534,7 +557,10 @@ class _LessonScreenState extends State<LessonScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              SfxService.instance.playClick();
+              Navigator.of(context).pop();
+            },
             child: const Text('OK', style: TextStyle(fontSize: 16)),
           ),
         ],
@@ -544,6 +570,7 @@ class _LessonScreenState extends State<LessonScreen> {
 
   Future<void> _showLessonCompleteDialog(int pointsGained, int totalLives) {
     _confettiController.play();
+    SfxService.instance.playLessonComplete();
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -572,7 +599,10 @@ class _LessonScreenState extends State<LessonScreen> {
         actions: [
           Center(
             child: ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                SfxService.instance.playClick();
+                Navigator.of(context).pop();
+              },
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.completed),
               child: const Text('Continuar Jornada'),
@@ -602,7 +632,10 @@ class _LessonScreenState extends State<LessonScreen> {
           ),
           const SizedBox(height: 32),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              SfxService.instance.playClick();
+              Navigator.of(context).pop();
+            },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('Sair da Lição'),
           ),

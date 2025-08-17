@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
-import 'package:musilingo/app/data/models/user_profile_model.dart';
 import 'package:musilingo/app/data/models/weekly_xp_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
@@ -17,33 +16,29 @@ class LeaguesScreen extends StatefulWidget {
 }
 
 class _LeaguesScreenState extends State<LeaguesScreen> {
-  late Future<List<WeeklyXp>> _leaderboardFuture;
   final DatabaseService _databaseService = DatabaseService();
+  late Future<List<WeeklyXp>> _leaderboardFuture;
 
   @override
   void initState() {
     super.initState();
-    final user = context.read<UserSession>().currentUser;
-    // Inicia o carregamento do ranking da liga do utilizador atual
-    _leaderboardFuture = _fetchLeaderboard(user);
-  }
-
-  Future<List<WeeklyXp>> _fetchLeaderboard(UserProfile? user) async {
-    if (user == null) {
-      // Se não houver utilizador, retorna uma lista vazia
-      return [];
-    }
-    return _databaseService.getLeagueLeaderboard(user.league);
+    final userLeague =
+        Provider.of<UserSession>(context, listen: false).currentUser?.league ??
+            'Bronze';
+    _leaderboardFuture = _databaseService.getLeagueLeaderboard(userLeague);
   }
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<UserSession>().currentUser;
+    final userLeague = user?.league ?? 'Bronze';
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text('Liga ${user?.league ?? ""}'),
-        backgroundColor: AppColors.background,
+        title: Text('Liga $userLeague',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: FutureBuilder<List<WeeklyXp>>(
@@ -53,28 +48,29 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
             return const Center(
                 child: CircularProgressIndicator(color: AppColors.accent));
           }
-
           if (snapshot.hasError) {
             return Center(
-                child: Text('Erro ao carregar o ranking: ${snapshot.error}'));
+                child: Text('Erro ao carregar a liga: ${snapshot.error}'));
           }
-
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-                child: Text(
-                    'Ainda não há ninguém no ranking desta liga. Comece a praticar!'));
+            return const Center(child: Text('Nenhum jogador na sua liga.'));
           }
 
           final leaderboard = snapshot.data!;
+          // Acessamos o ID através do objeto profile aninhado
+          final currentUserRanking =
+              leaderboard.indexWhere((xpData) => xpData.profile.id == user?.id);
 
           return ListView.builder(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             itemCount: leaderboard.length,
             itemBuilder: (context, index) {
-              final entry = leaderboard[index];
+              final xpData = leaderboard[index];
               return LeagueListItemWidget(
-                leaderboardEntry: entry,
                 rank: index + 1,
-                isCurrentUser: entry.userId == user?.id,
+                leaderboardEntry: xpData, // <-- Passamos o objeto completo
+                isCurrentUser: currentUserRanking == index,
               );
             },
           );

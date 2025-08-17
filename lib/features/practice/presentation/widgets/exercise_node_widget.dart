@@ -5,70 +5,55 @@ import 'package:musilingo/app/core/theme/app_colors.dart';
 
 class ExerciseNodeWidget extends StatelessWidget {
   final String title;
-  final int difficulty;
-  final IconData icon; // Parâmetro de ícone adicionado
+  final String description;
+  final IconData icon;
   final VoidCallback onTap;
 
   const ExerciseNodeWidget({
     super.key,
     required this.title,
-    required this.difficulty,
+    required this.description,
     required this.icon,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 220,
-        height: 80,
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withAlpha(100),
-              blurRadius: 12.0,
-              spreadRadius: 2.0,
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 32, color: AppColors.accent), // Ícone dinâmico
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+    return Card(
+      color: AppColors.card
+          .withAlpha((255 * 0.5).round()), // Correção de 'withOpacity'
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.accent, size: 32),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    'Dificuldade: $difficulty',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                          fontSize: 14, color: AppColors.textSecondary),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const Icon(Icons.play_circle_fill,
-                size: 28, color: AppColors.completed),
-            const SizedBox(width: 16),
-          ],
+              const Icon(Icons.arrow_forward_ios,
+                  color: AppColors.textSecondary),
+            ],
+          ),
         ),
       ),
     );

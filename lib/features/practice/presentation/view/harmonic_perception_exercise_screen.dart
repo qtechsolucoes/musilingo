@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/harmonic_exercise_model.dart';
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
+import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
-import 'package:musilingo/features/practice/presentation/view/melodic_perception_exercise_screen.dart'; // Reutilizamos o MusicUtils
+import 'package:musilingo/features/practice/presentation/view/melodic_perception_exercise_screen.dart';
 import 'package:provider/provider.dart';
 
 class HarmonicPerceptionExerciseScreen extends StatefulWidget {
@@ -25,8 +27,7 @@ class _HarmonicPerceptionExerciseScreenState
   late ConfettiController _confettiController;
   bool _showFeedback = false;
   bool? _isCorrect;
-  bool _isPlaying =
-      false; // Controla o estado de reprodução para desativar botões
+  bool _isPlaying = false;
 
   int? _instrumentSoundfontId;
 
@@ -42,7 +43,7 @@ class _HarmonicPerceptionExerciseScreenState
     final sfId = await _midiPro.loadSoundfont(
       path: 'assets/sf2/GeneralUserGS.sf2',
       bank: 0,
-      program: 0, // Piano
+      program: 0,
     );
     if (mounted) {
       setState(() {
@@ -58,6 +59,7 @@ class _HarmonicPerceptionExerciseScreenState
   }
 
   void _playChord() {
+    SfxService.instance.playClick();
     if (_instrumentSoundfontId == null || _isPlaying) return;
     setState(() => _isPlaying = true);
 
@@ -79,6 +81,7 @@ class _HarmonicPerceptionExerciseScreenState
   }
 
   void _playArpeggio() async {
+    SfxService.instance.playClick();
     if (_instrumentSoundfontId == null || _isPlaying) return;
     setState(() => _isPlaying = true);
 
@@ -86,7 +89,6 @@ class _HarmonicPerceptionExerciseScreenState
         .map((noteName) => MusicUtils.noteNameToMidi(noteName))
         .toList();
 
-    // Toca as notas em sequência (arpejo)
     for (final note in midiNotes) {
       _midiPro.playNote(
           sfId: _instrumentSoundfontId!, channel: 0, key: note, velocity: 127);
@@ -98,6 +100,7 @@ class _HarmonicPerceptionExerciseScreenState
   }
 
   void _onAnswerSubmitted(String selectedOption) {
+    SfxService.instance.playClick();
     final userSession = context.read<UserSession>();
     final isCorrect = selectedOption == widget.exercise.correctAnswer;
 
@@ -116,84 +119,86 @@ class _HarmonicPerceptionExerciseScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.exercise.title),
-        backgroundColor: AppColors.background,
-      ),
-      body: Stack(
-        alignment: Alignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Spacer(flex: 2),
-                // Botões de Play (Bloco e Arpejo)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildPlayButton(
-                      icon: Icons.play_circle_fill,
-                      label: 'Em Bloco',
-                      onPressed: _playChord,
-                    ),
-                    _buildPlayButton(
-                      icon: Icons.linear_scale,
-                      label: 'Arpejado',
-                      onPressed: _playArpeggio,
-                    ),
-                  ],
-                ),
-                const Spacer(flex: 3),
-                // Opções de Resposta
-                ...widget.exercise.options.map((option) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: ElevatedButton(
-                      onPressed: _showFeedback || _isPlaying
-                          ? null
-                          : () => _onAnswerSubmitted(option),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+    return GradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Text(widget.exercise.title),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: Stack(
+          alignment: Alignment.center,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Spacer(flex: 2),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildPlayButton(
+                        icon: Icons.play_circle_fill,
+                        label: 'Em Bloco',
+                        onPressed: _playChord,
                       ),
-                      child: Text(option, style: const TextStyle(fontSize: 18)),
-                    ),
-                  );
-                }),
-                const Spacer(flex: 1),
-              ],
+                      _buildPlayButton(
+                        icon: Icons.linear_scale,
+                        label: 'Arpejado',
+                        onPressed: _playArpeggio,
+                      ),
+                    ],
+                  ),
+                  const Spacer(flex: 3),
+                  ...widget.exercise.options.map((option) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: ElevatedButton(
+                        onPressed: _showFeedback || _isPlaying
+                            ? null
+                            : () => _onAnswerSubmitted(option),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child:
+                            Text(option, style: const TextStyle(fontSize: 18)),
+                      ),
+                    );
+                  }),
+                  const Spacer(flex: 1),
+                ],
+              ),
             ),
-          ),
-          if (_showFeedback)
+            if (_showFeedback)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: _buildFeedbackBar(),
+              ),
             Align(
-              alignment: Alignment.bottomCenter,
-              child: _buildFeedbackBar(),
+              alignment: Alignment.topCenter,
+              child: ConfettiWidget(
+                confettiController: _confettiController,
+                blastDirectionality: BlastDirectionality.explosive,
+                shouldLoop: false,
+                colors: const [
+                  Colors.green,
+                  Colors.blue,
+                  Colors.pink,
+                  Colors.orange,
+                  Colors.purple
+                ],
+              ),
             ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-              confettiController: _confettiController,
-              blastDirectionality: BlastDirectionality.explosive,
-              shouldLoop: false,
-              colors: const [
-                Colors.green,
-                Colors.blue,
-                Colors.pink,
-                Colors.orange,
-                Colors.purple
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // Widget auxiliar para os botões de play
   Widget _buildPlayButton(
       {required IconData icon,
       required String label,
@@ -238,6 +243,7 @@ class _HarmonicPerceptionExerciseScreenState
           ),
           ElevatedButton(
             onPressed: () {
+              SfxService.instance.playClick();
               if (isCorrect) {
                 Navigator.of(context).pop();
               } else {

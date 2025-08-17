@@ -1,11 +1,10 @@
 // lib/app/presentation/view/splash_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:musilingo/app/core/theme/app_colors.dart';
+import 'package:musilingo/app/presentation/view/login_screen.dart';
 import 'package:musilingo/app/presentation/view/main_navigation_screen.dart';
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
 import 'package:musilingo/app/services/user_session.dart';
-import 'package:musilingo/features/onboarding/presentation/view/onboarding_screen.dart';
-import 'package:musilingo/features/auth/presentation/view/login_screen.dart';
 import 'package:musilingo/main.dart';
 import 'package:provider/provider.dart';
 
@@ -16,72 +15,91 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
   @override
   void initState() {
     super.initState();
-    _initializeAndRedirect();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
+    _animation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _redirect();
   }
 
-  Future<void> _initializeAndRedirect() async {
-    // Espera um segundo para a splash screen ser visível e a UI inicializar
-    await Future.delayed(const Duration(seconds: 1));
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _redirect() async {
+    await Future.delayed(
+        const Duration(seconds: 3)); // Um pouco mais de tempo para a animação
 
     if (!mounted) return;
 
     final session = supabase.auth.currentSession;
+    final userSession = context.read<UserSession>();
 
     if (session != null) {
-      try {
-        // ETAPA 1: Tenta carregar o perfil do usuário logado
-        await context.read<UserSession>().loadUserProfile();
-
-        if (mounted) {
-          // ETAPA 2 (SUCESSO): Navega para a tela principal
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-                builder: (context) => const MainNavigationScreen()),
-          );
-        }
-      } catch (e) {
-        // ETAPA 2 (FALHA): Se houver erro (rede, etc.), desloga e vai para o login
-        await supabase.auth.signOut();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: AppColors.primary,
-              content:
-                  Text('Sua sessão expirou. Por favor, faça login novamente.'),
-            ),
-          );
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-          );
-        }
+      await userSession.initializeSession();
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+        );
       }
     } else {
-      // Se não houver sessão, vai para a tela de Onboarding
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.music_note, size: 100, color: AppColors.accent),
-            SizedBox(height: 20),
-            CircularProgressIndicator(color: AppColors.accent),
-            SizedBox(height: 16),
-            Text('Carregando...',
-                style: TextStyle(color: AppColors.textSecondary)),
-          ],
+    return GradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: ScaleTransition(
+            scale: _animation,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.music_note, color: Colors.white, size: 80),
+                const SizedBox(height: 20),
+                Text(
+                  'Musilingo',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 10.0,
+                        // ignore: deprecated_member_use
+                        color: Colors.black.withOpacity(0.3),
+                        offset: const Offset(2, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -3,7 +3,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:musilingo/app/data/models/harmonic_exercise_model.dart';
-import 'package:musilingo/app/data/models/harmonic_progression_model.dart'; // <-- NOVO IMPORT
+import 'package:musilingo/app/data/models/harmonic_progression_model.dart';
 import 'package:musilingo/app/data/models/module_model.dart';
 import 'package:musilingo/app/data/models/user_profile_model.dart';
 import 'package:musilingo/app/data/models/weekly_xp_model.dart';
@@ -165,7 +165,13 @@ class DatabaseService {
         .order('xp', ascending: false)
         .limit(30);
 
-    return (response as List).map((data) => WeeklyXp.fromMap(data)).toList();
+    // --- CORREÇÃO APLICADA AQUI ---
+    // Filtramos a lista para remover quaisquer entradas que não tenham
+    // um perfil de usuário válido, evitando o crash.
+    return (response as List)
+        .where((data) => data['profiles'] != null)
+        .map((data) => WeeklyXp.fromMap(data))
+        .toList();
   }
 
   Future<List<HarmonicExercise>> getHarmonicExercises() async {
@@ -180,7 +186,6 @@ class DatabaseService {
         .toList();
   }
 
-  // --- NOVA FUNÇÃO PARA EXERCÍCIOS DE PROGRESSÃO HARMÔNICA ---
   Future<List<HarmonicProgression>> getHarmonicProgressions() async {
     final response = await supabase
         .from('practice_progressions')
