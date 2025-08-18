@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/presentation/view/splash_screen.dart';
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart'; // Import adicionado
 import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/main.dart';
@@ -39,79 +40,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = userSession.currentUser;
 
     if (user == null) {
-      return const Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Center(child: Text('Nenhum usuário logado.')),
+      // --- CORREÇÃO APLICADA AQUI ---
+      return const GradientBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: Text('Nenhum usuário logado.')),
+        ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Perfil',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+    // --- CORREÇÃO APLICADA AQUI ---
+    return GradientBackground(
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              SfxService.instance.playClick();
-              final navigator = Navigator.of(context);
-              await supabase.auth.signOut();
-              userSession.clearSession();
-              navigator.pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const SplashScreen()),
-                (route) => false,
-              );
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Center(
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: AppColors.primary,
-                    backgroundImage:
-                        user.avatarUrl != null && user.avatarUrl!.isNotEmpty
-                            ? NetworkImage(user.avatarUrl!)
-                            : null,
-                    child: user.avatarUrl == null || user.avatarUrl!.isEmpty
-                        ? const Icon(Icons.person,
-                            size: 60, color: AppColors.background)
-                        : null,
-                  ),
-                  GestureDetector(
-                    onTap: _pickAndUploadAvatar,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: AppColors.accent,
-                        shape: BoxShape.circle,
-                      ),
-                      child:
-                          const Icon(Icons.edit, color: Colors.white, size: 20),
-                    ),
-                  )
-                ],
-              ),
+        appBar: AppBar(
+          title: const Text('Perfil',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: () async {
+                SfxService.instance.playClick();
+                final navigator = Navigator.of(context);
+                await supabase.auth.signOut();
+                userSession.clearSession();
+                navigator.pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const SplashScreen()),
+                  (route) => false,
+                );
+              },
             ),
-            const SizedBox(height: 16),
-            Text(
-              user.fullName,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 24),
-            _buildStatsCard(context),
-            const SizedBox(height: 24),
           ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              Center(
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundColor: AppColors.primary,
+                      backgroundImage:
+                          user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                              ? NetworkImage(user.avatarUrl!)
+                              : null,
+                      child: user.avatarUrl == null || user.avatarUrl!.isEmpty
+                          ? const Icon(Icons.person,
+                              size: 60, color: AppColors.background)
+                          : null,
+                    ),
+                    GestureDetector(
+                      onTap: _pickAndUploadAvatar,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.edit,
+                            color: Colors.white, size: 20),
+                      ),
+                    )
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                user.fullName,
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 24),
+              _buildStatsCard(context),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );

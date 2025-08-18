@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/weekly_xp_model.dart';
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart'; // Import adicionado
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/leagues/presentation/widgets/league_list_item_widget.dart';
@@ -33,48 +34,52 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
     final user = context.watch<UserSession>().currentUser;
     final userLeague = user?.league ?? 'Bronze';
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: Text('Liga $userLeague',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+    // --- CORREÇÃO APLICADA AQUI ---
+    return GradientBackground(
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: FutureBuilder<List<WeeklyXp>>(
-        future: _leaderboardFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: AppColors.accent));
-          }
-          if (snapshot.hasError) {
-            return Center(
-                child: Text('Erro ao carregar a liga: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Nenhum jogador na sua liga.'));
-          }
+        appBar: AppBar(
+          title: Text('Liga $userLeague',
+              style:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: FutureBuilder<List<WeeklyXp>>(
+          future: _leaderboardFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                  child: CircularProgressIndicator(color: AppColors.accent));
+            }
+            if (snapshot.hasError) {
+              return Center(
+                  child: Text('Erro ao carregar a liga: ${snapshot.error}'));
+            }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(child: Text('Nenhum jogador na sua liga.'));
+            }
 
-          final leaderboard = snapshot.data!;
-          // Acessamos o ID através do objeto profile aninhado
-          final currentUserRanking =
-              leaderboard.indexWhere((xpData) => xpData.profile.id == user?.id);
+            final leaderboard = snapshot.data!;
+            // Acessamos o ID através do objeto profile aninhado
+            final currentUserRanking = leaderboard
+                .indexWhere((xpData) => xpData.profile.id == user?.id);
 
-          return ListView.builder(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            itemCount: leaderboard.length,
-            itemBuilder: (context, index) {
-              final xpData = leaderboard[index];
-              return LeagueListItemWidget(
-                rank: index + 1,
-                leaderboardEntry: xpData, // <-- Passamos o objeto completo
-                isCurrentUser: currentUserRanking == index,
-              );
-            },
-          );
-        },
+            return ListView.builder(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              itemCount: leaderboard.length,
+              itemBuilder: (context, index) {
+                final xpData = leaderboard[index];
+                return LeagueListItemWidget(
+                  rank: index + 1,
+                  leaderboardEntry: xpData, // <-- Passamos o objeto completo
+                  isCurrentUser: currentUserRanking == index,
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

@@ -38,6 +38,8 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^4.0.0
+  mockito: ^5.4.4  # <-- ADICIONE ESTA LINHA
+  build_runner: ^2.4.9 # <-- E ESTA TAMBÉM (necessária para o mockito)
   supabase: ^2.1.2
   yaml: ^3.1.2
   # A LINHA FOI REMOVIDA DAQUI

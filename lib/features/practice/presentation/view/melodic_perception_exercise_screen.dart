@@ -1,7 +1,6 @@
 // lib/features/practice/presentation/view/melodic_perception_exercise_screen.dart
 
 import 'dart:async';
-import 'package:collection/collection.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,10 +11,12 @@ import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
 import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
+import 'package:musilingo/features/practice/presentation/viewmodel/melodic_exercise_viewmodel.dart';
 import 'package:musilingo/features/practice/presentation/widgets/melodic_input_panel.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+// Funções utilitárias permanecem fora da classe
 class MusicUtils {
   static const Map<String, int> _noteValues = {
     'C': 0,
@@ -40,9 +41,7 @@ class MusicUtils {
     if (noteName.contains("rest")) return 0;
     final notePart = noteName.replaceAll(RegExp(r'[0-9]'), '');
     final octavePart = noteName.replaceAll(RegExp(r'[^0-9]'), '');
-
     if (octavePart.isEmpty || !_noteValues.containsKey(notePart)) return 60;
-
     final octave = int.parse(octavePart);
     return _noteValues[notePart]! + (octave + 1) * 12;
   }
@@ -58,18 +57,31 @@ class MusicUtils {
   };
 }
 
-class MelodicPerceptionExerciseScreen extends StatefulWidget {
+/// Widget principal que configura o Provider. Agora é um StatelessWidget.
+class MelodicPerceptionExerciseScreen extends StatelessWidget {
   final MelodicExercise exercise;
   const MelodicPerceptionExerciseScreen({super.key, required this.exercise});
 
   @override
-  State<MelodicPerceptionExerciseScreen> createState() =>
-      _MelodicPerceptionExerciseScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => MelodicExerciseViewModel(exercise: exercise),
+      child: const _MelodicExerciseView(),
+    );
+  }
 }
 
-class _MelodicPerceptionExerciseScreenState
-    extends State<MelodicPerceptionExerciseScreen> {
-  late final WebViewController _controller;
+/// Widget interno que constrói a UI e gerencia os controladores da UI.
+class _MelodicExerciseView extends StatefulWidget {
+  const _MelodicExerciseView();
+
+  @override
+  State<_MelodicExerciseView> createState() => _MelodicExerciseViewState();
+}
+
+class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
+  // Apenas estado relacionado à UI (controladores) permanece aqui.
+  late final WebViewController _webViewController;
   final _midiPro = MidiPro();
   int? _instrumentSoundfontId;
   int? _percussionSoundfontId;
@@ -77,16 +89,10 @@ class _MelodicPerceptionExerciseScreenState
 
   bool _isWebViewReady = false;
   bool _isSoundfontReady = false;
-
-  List<String> _userSequence = [];
-  bool _isVerified = false;
-
   bool _isMetronomeEnabled = true;
   final ValueNotifier<int> _beatCountNotifier = ValueNotifier(0);
 
-  int _octaveOffset = 0;
-  AccidentalType _currentAccidental = AccidentalType.none;
-
+  // Símbolos para a UI
   static final Map<String, String> _figureSymbols = {
     'whole': '𝅝',
     'half': '𝅗𝅥',
@@ -106,59 +112,20 @@ class _MelodicPerceptionExerciseScreenState
     '64th': '𝅁',
   };
 
-  late String _selectedNote;
-  late String _selectedFigure;
-
-  List<String> get _baseNotePalette {
-    final originalPalette = widget.exercise.notePalette;
-    if (originalPalette.length < 2) return originalPalette;
-    final firstNoteName =
-        originalPalette.first.replaceAll(RegExp(r'[0-9]'), '');
-    final lastNoteName = originalPalette.last.replaceAll(RegExp(r'[0-9]'), '');
-    if (firstNoteName == lastNoteName) {
-      return originalPalette.sublist(0, originalPalette.length - 1);
-    }
-    return originalPalette;
-  }
-
-  List<String> get _octaveAdjustedNotePalette {
-    return _baseNotePalette.map((note) {
-      final noteName = note.substring(0, note.length - 1);
-      final octave = int.parse(note.substring(note.length - 1));
-      return '$noteName${octave + _octaveOffset}';
-    }).toList();
-  }
-
-  int get _displayOctave {
-    if (_octaveAdjustedNotePalette.isEmpty) return 4 + _octaveOffset;
-    final firstNote = _octaveAdjustedNotePalette.first;
-    return int.tryParse(firstNote.replaceAll(RegExp(r'[^0-9]'), '')) ?? 4;
-  }
-
-  void _onOctaveUp() => setState(() {
-        if (_octaveOffset < 2) _octaveOffset++;
-      });
-  void _onOctaveDown() => setState(() {
-        if (_octaveOffset > -2) _octaveOffset--;
-      });
-
-  void _onAccidentalSelected(AccidentalType type) {
-    setState(() {
-      _currentAccidental =
-          (_currentAccidental == type) ? AccidentalType.none : type;
-    });
-  }
-
   @override
   void initState() {
     super.initState();
     _confettiController =
         ConfettiController(duration: const Duration(seconds: 1));
-    _selectedNote = widget.exercise.notePalette.isNotEmpty
-        ? widget.exercise.notePalette.first
-        : 'C4';
-    _selectedFigure = 'quarter';
     _initializeScreen();
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    _beatCountNotifier.dispose();
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    super.dispose();
   }
 
   Future<void> _initializeScreen() async {
@@ -167,7 +134,7 @@ class _MelodicPerceptionExerciseScreenState
       DeviceOrientation.landscapeLeft,
     ]);
     await _initializeAudio();
-    _controller = WebViewController()
+    _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.transparent)
       ..setNavigationDelegate(
@@ -200,145 +167,35 @@ class _MelodicPerceptionExerciseScreenState
     }
   }
 
-  @override
-  void dispose() {
-    _confettiController.dispose();
-    _beatCountNotifier.dispose();
-    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
-    super.dispose();
-  }
-
-  Future<void> _playSequence(List<String> sequence) async {
-    if (!_isSoundfontReady ||
-        _instrumentSoundfontId == null ||
-        _percussionSoundfontId == null) {
-      return;
-    }
-
-    final int bpm = widget.exercise.tempo;
-    final double beatDurationMs = 60000.0 / bpm;
-    final timeSignatureParts = widget.exercise.timeSignature.split('/');
-    final beatsPerMeasure = int.parse(timeSignatureParts[0]);
-
-    for (int i = 0; i < beatsPerMeasure; i++) {
-      _beatCountNotifier.value = i + 1;
-      _midiPro.playNote(
-          sfId: _percussionSoundfontId!,
-          channel: 9,
-          key: (i == 0) ? 76 : 77,
-          velocity: (i == 0) ? 127 : 100);
-      await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
-    }
-
-    int currentBeat = 0;
-    for (String noteData in sequence) {
-      final parts = noteData.split('_');
-      final noteName = parts[0];
-      final durationName = parts[1];
-      final midiNote = MusicUtils.noteNameToMidi(noteName);
-      final beatDurationMultiplier =
-          MusicUtils.figureDurations[durationName] ?? 1.0;
-
-      if (_isMetronomeEnabled) {
-        _beatCountNotifier.value = (currentBeat % beatsPerMeasure) + 1;
-        _midiPro.playNote(
-            sfId: _percussionSoundfontId!,
-            channel: 9,
-            key: (currentBeat % beatsPerMeasure == 0) ? 76 : 77,
-            velocity: 100);
-      }
-      if (!noteName.contains("rest")) {
-        _midiPro.playNote(
-            sfId: _instrumentSoundfontId!,
-            channel: 0,
-            key: midiNote,
-            velocity: 127);
-      }
-
-      await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
-
-      for (int i = 1; i < beatDurationMultiplier; i++) {
-        if (_isMetronomeEnabled) {
-          _beatCountNotifier.value = ((currentBeat + i) % beatsPerMeasure) + 1;
-          _midiPro.playNote(
-              sfId: _percussionSoundfontId!,
-              channel: 9,
-              key: ((currentBeat + i) % beatsPerMeasure == 0) ? 76 : 77,
-              velocity: 100);
-        }
-        await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
-      }
-
-      if (!noteName.contains("rest")) {
-        _midiPro.stopNote(
-            sfId: _instrumentSoundfontId!, channel: 0, key: midiNote);
-      }
-      currentBeat += beatDurationMultiplier.round();
-    }
-
-    await Future.delayed(const Duration(milliseconds: 500));
-    _beatCountNotifier.value = 0;
-  }
-
-  void _playExerciseMelody() {
-    SfxService.instance.playClick();
-    _playSequence(widget.exercise.correctSequence);
-  }
-
-  void _playUserSequence() {
-    SfxService.instance.playClick();
-    _playSequence(_userSequence);
-  }
-
-  void _addRest() {
-    if (_isVerified) return;
-    setState(() => _userSequence.add("rest_$_selectedFigure"));
-    _renderUserSequence();
-  }
-
-  void _addNoteToSequence() {
-    if (_isVerified) return;
-    String noteNameOnly = _selectedNote.replaceAll(RegExp(r'[0-9]'), '');
-    String accidentalSign = "";
-    if (_currentAccidental == AccidentalType.sharp) {
-      accidentalSign = "#";
-    } else if (_currentAccidental == AccidentalType.flat) {
-      accidentalSign = "b";
-    }
-    final finalNoteName = '$noteNameOnly$accidentalSign$_displayOctave';
-    setState(() {
-      _userSequence.add("${finalNoteName}_$_selectedFigure");
-      _currentAccidental = AccidentalType.none;
-    });
-    _renderUserSequence();
-  }
-
-  void _removeLastNote() {
-    if (_isVerified || _userSequence.isEmpty) return;
-    setState(() => _userSequence.removeLast());
-    _renderUserSequence();
-  }
-
   void _renderUserSequence(
       {String Function(String note, bool isCorrect)? colorizer}) {
     if (!_isWebViewReady) return;
-    final timeSignatureParts = widget.exercise.timeSignature.split('/');
+
+    // Lê a sequência do ViewModel em vez do estado local
+    final viewModel = context.read<MelodicExerciseViewModel>();
+    final userSequence = viewModel.userSequence;
+    final exercise = viewModel.exercise;
+
+    final timeSignatureParts = exercise.timeSignature.split('/');
     final beatsPerMeasure = double.parse(timeSignatureParts[0]);
     final beatType = double.parse(timeSignatureParts[1]);
     final measureCapacity = beatsPerMeasure * (4.0 / beatType);
+
     StringBuffer measuresXml = StringBuffer();
     int measureCount = 1;
     double currentMeasureDuration = 0.0;
     measuresXml.write('<measure number="$measureCount">');
     measuresXml.write(
-        '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>${beatsPerMeasure.toInt()}</beats><beat-type>${beatType.toInt()}</beat-type></time><clef><sign>${widget.exercise.clef == 'treble' ? 'G' : 'F'}</sign><line>${widget.exercise.clef == 'treble' ? '2' : '4'}</line></clef></attributes>');
-    for (var entry in _userSequence.asMap().entries) {
+        '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>${beatsPerMeasure.toInt()}</beats><beat-type>${beatType.toInt()}</beat-type></time><clef><sign>${exercise.clef == 'treble' ? 'G' : 'F'}</sign><line>${exercise.clef == 'treble' ? '2' : '4'}</line></clef></attributes>');
+
+    for (var entry in userSequence.asMap().entries) {
       final index = entry.key;
       final noteData = entry.value.split('_');
       final noteName = noteData[0];
       final figure = noteData[1];
       final noteDuration =
           (MusicUtils.figureDurations[figure] ?? 0.0) * (4.0 / beatType);
+
       if (currentMeasureDuration + noteDuration > measureCapacity + 0.001) {
         measuresXml.write('</measure>');
         measureCount++;
@@ -346,14 +203,17 @@ class _MelodicPerceptionExerciseScreenState
         currentMeasureDuration = 0;
       }
       currentMeasureDuration += noteDuration;
+
       String colorTag = "";
       if (colorizer != null) {
-        final isCorrect = index < widget.exercise.correctSequence.length &&
-            widget.exercise.correctSequence[index] == entry.value;
+        final isCorrect = index < exercise.correctSequence.length &&
+            exercise.correctSequence[index] == entry.value;
         colorTag = colorizer(entry.value, isCorrect);
       }
+
       final type = figure;
       final xmlDuration = (MusicUtils.figureDurations[figure]! * 4).toInt();
+
       if (noteName.contains("rest")) {
         measuresXml.write(
             '<note $colorTag><rest/><duration>$xmlDuration</duration><type>$type</type></note>');
@@ -381,14 +241,28 @@ class _MelodicPerceptionExerciseScreenState
     _loadScoreIntoWebView(fullXml);
   }
 
+  void _loadScoreIntoWebView(String musicXml) {
+    if (_isWebViewReady) {
+      final escapedXml = musicXml
+          .replaceAll('\\', '\\\\')
+          .replaceAll("`", "\\`")
+          .replaceAll("\n", "")
+          .replaceAll("\r", "");
+      _webViewController.runJavaScript('window.loadScore(`$escapedXml`)');
+    }
+  }
+
   void _verifyAnswer() {
-    setState(() => _isVerified = true);
-    final bool isCorrect = const ListEquality()
-        .equals(_userSequence, widget.exercise.correctSequence);
+    final viewModel = context.read<MelodicExerciseViewModel>();
     final userSession = context.read<UserSession>();
+
+    final isCorrect = viewModel.verifyAnswer();
+
+    // Re-renderiza a partitura com as cores de feedback
     _renderUserSequence(
         colorizer: (note, isCorrect) =>
             'color="${isCorrect ? AppColors.completedHex : AppColors.errorHex}"');
+
     if (isCorrect) {
       userSession.answerCorrectly();
       userSession.recordPractice();
@@ -399,17 +273,88 @@ class _MelodicPerceptionExerciseScreenState
     }
   }
 
-  void _loadScoreIntoWebView(String musicXml) {
-    if (_isWebViewReady) {
-      final escapedXml = musicXml
-          .replaceAll('\\', '\\\\')
-          .replaceAll("`", "\\`")
-          .replaceAll("\n", "")
-          .replaceAll("\r", "");
-      _controller.runJavaScript('window.loadScore(`$escapedXml`)');
+  Future<void> _playSequence(List<String> sequence) async {
+    if (!_isSoundfontReady ||
+        _instrumentSoundfontId == null ||
+        _percussionSoundfontId == null) {
+      return;
     }
+
+    final exercise = context.read<MelodicExerciseViewModel>().exercise;
+    final int bpm = exercise.tempo;
+    final double beatDurationMs = 60000.0 / bpm;
+    final timeSignatureParts = exercise.timeSignature.split('/');
+    final beatsPerMeasure = int.parse(timeSignatureParts[0]);
+
+    // Lógica de reprodução de áudio... (permanece a mesma)
+    for (int i = 0; i < beatsPerMeasure; i++) {
+      _beatCountNotifier.value = i + 1;
+      _midiPro.playNote(
+          sfId: _percussionSoundfontId!,
+          channel: 9,
+          key: (i == 0) ? 76 : 77,
+          velocity: (i == 0) ? 127 : 100);
+      await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
+    }
+    int currentBeat = 0;
+    for (String noteData in sequence) {
+      final parts = noteData.split('_');
+      final noteName = parts[0];
+      final durationName = parts[1];
+      final midiNote = MusicUtils.noteNameToMidi(noteName);
+      final beatDurationMultiplier =
+          MusicUtils.figureDurations[durationName] ?? 1.0;
+      if (_isMetronomeEnabled) {
+        _beatCountNotifier.value = (currentBeat % beatsPerMeasure) + 1;
+        _midiPro.playNote(
+            sfId: _percussionSoundfontId!,
+            channel: 9,
+            key: (currentBeat % beatsPerMeasure == 0) ? 76 : 77,
+            velocity: 100);
+      }
+      if (!noteName.contains("rest")) {
+        _midiPro.playNote(
+            sfId: _instrumentSoundfontId!,
+            channel: 0,
+            key: midiNote,
+            velocity: 127);
+      }
+      await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
+      for (int i = 1; i < beatDurationMultiplier; i++) {
+        if (_isMetronomeEnabled) {
+          _beatCountNotifier.value = ((currentBeat + i) % beatsPerMeasure) + 1;
+          _midiPro.playNote(
+              sfId: _percussionSoundfontId!,
+              channel: 9,
+              key: ((currentBeat + i) % beatsPerMeasure == 0) ? 76 : 77,
+              velocity: 100);
+        }
+        await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
+      }
+      if (!noteName.contains("rest")) {
+        _midiPro.stopNote(
+            sfId: _instrumentSoundfontId!, channel: 0, key: midiNote);
+      }
+      currentBeat += beatDurationMultiplier.round();
+    }
+    await Future.delayed(const Duration(milliseconds: 500));
+    _beatCountNotifier.value = 0;
   }
 
+  // Métodos que disparam a reprodução
+  void _playExerciseMelody() {
+    SfxService.instance.playClick();
+    final exercise = context.read<MelodicExerciseViewModel>().exercise;
+    _playSequence(exercise.correctSequence);
+  }
+
+  void _playUserSequence() {
+    SfxService.instance.playClick();
+    final userSequence = context.read<MelodicExerciseViewModel>().userSequence;
+    _playSequence(userSequence);
+  }
+
+  // --- Diálogos de Feedback (permanecem praticamente os mesmos) ---
   Future<void> _showSuccessDialog() {
     _confettiController.play();
     return showDialog(
@@ -423,17 +368,16 @@ class _MelodicPerceptionExerciseScreenState
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: AppColors.accent, fontWeight: FontWeight.bold)),
-                content: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.star, color: AppColors.accent, size: 50),
-                  const SizedBox(height: 12),
-                  const Text('Você transcreveu a melodia perfeitamente!',
+                content:
+                    const Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.star, color: AppColors.accent, size: 50),
+                  SizedBox(height: 12),
+                  Text('Você transcreveu a melodia perfeitamente!',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 16, color: Colors.white)),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Text('+10 pontos!',
-                      style: TextStyle(
-                          color: AppColors.textSecondary
-                              .withAlpha((255 * 0.8).round())))
+                      style: TextStyle(color: AppColors.textSecondary))
                 ]),
                 actionsAlignment: MainAxisAlignment.center,
                 actions: [
@@ -441,6 +385,7 @@ class _MelodicPerceptionExerciseScreenState
                       onPressed: () {
                         SfxService.instance.playClick();
                         Navigator.of(context).pop();
+                        // Opcional: Navegar para fora da tela ou carregar próximo exercício
                       },
                       style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.completed),
@@ -476,17 +421,9 @@ class _MelodicPerceptionExerciseScreenState
                       onPressed: () {
                         SfxService.instance.playClick();
                         Navigator.of(context).pop();
-                        setState(() {
-                          _userSequence = [];
-                          _isVerified = false;
-                          _octaveOffset = 0;
-                          _currentAccidental = AccidentalType.none;
-                          _selectedNote = widget.exercise.notePalette.isNotEmpty
-                              ? widget.exercise.notePalette.first
-                              : 'C4';
-                          _selectedFigure = 'quarter';
-                        });
-                        _renderUserSequence();
+                        // Chama o método reset do ViewModel
+                        context.read<MelodicExerciseViewModel>().reset();
+                        _renderUserSequence(); // Renderiza a pauta vazia
                       },
                       child: const Text('Tentar Novamente'))
                 ]));
@@ -495,11 +432,13 @@ class _MelodicPerceptionExerciseScreenState
   @override
   Widget build(BuildContext context) {
     if (!_isWebViewReady || !_isSoundfontReady) {
+      // Tela de Loading... (permanece a mesma)
+      final exercise = context.read<MelodicExerciseViewModel>().exercise;
       return GradientBackground(
         child: Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
-                title: Text(widget.exercise.title),
+                title: Text(exercise.title),
                 backgroundColor: Colors.transparent,
                 elevation: 0),
             body: const Center(
@@ -513,22 +452,33 @@ class _MelodicPerceptionExerciseScreenState
       );
     }
 
+    // Ouve o ViewModel para reconstruir quando o estado mudar.
+    final viewModel = context.watch<MelodicExerciseViewModel>();
+
+    // Dispara a renderização sempre que a sequência do usuário mudar.
+    // Usamos um post-frame callback para evitar chamar setState durante o build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _renderUserSequence();
+    });
+
     return GradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: Text(widget.exercise.title),
+          title: Text(viewModel.exercise.title),
           backgroundColor: Colors.transparent,
           elevation: 0,
           actions: [
             IconButton(
                 icon: const Icon(Icons.undo),
                 tooltip: "Desfazer última nota",
-                onPressed: _isVerified
+                onPressed: viewModel.isVerified
                     ? null
                     : () {
                         SfxService.instance.playClick();
-                        _removeLastNote();
+                        context
+                            .read<MelodicExerciseViewModel>()
+                            .removeLastNote();
                       }),
             IconButton(
               icon: SvgPicture.asset('assets/images/metronome.svg',
@@ -546,28 +496,18 @@ class _MelodicPerceptionExerciseScreenState
             IconButton(
                 icon: const Icon(Icons.hearing),
                 tooltip: "Ouvir o desafio",
-                onPressed: _isVerified ? null : _playExerciseMelody),
+                onPressed: viewModel.isVerified ? null : _playExerciseMelody),
             IconButton(
                 icon: const Icon(Icons.play_circle_outline),
                 tooltip: "Ouvir sua resposta",
-                onPressed: _isVerified ? null : _playUserSequence),
-            if (_isVerified)
+                onPressed: viewModel.isVerified ? null : _playUserSequence),
+            if (viewModel.isVerified)
               IconButton(
                 icon: const Icon(Icons.refresh),
                 tooltip: "Tentar Novamente",
                 onPressed: () {
                   SfxService.instance.playClick();
-                  setState(() {
-                    _userSequence = [];
-                    _isVerified = false;
-                    _octaveOffset = 0;
-                    _currentAccidental = AccidentalType.none;
-                    _selectedNote = widget.exercise.notePalette.isNotEmpty
-                        ? widget.exercise.notePalette.first
-                        : 'C4';
-                    _selectedFigure = 'quarter';
-                  });
-                  _renderUserSequence();
+                  context.read<MelodicExerciseViewModel>().reset();
                 },
               ),
           ],
@@ -588,7 +528,7 @@ class _MelodicPerceptionExerciseScreenState
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: WebViewWidget(controller: _controller),
+                          child: WebViewWidget(controller: _webViewController),
                         ),
                       ),
                     ),
@@ -598,6 +538,7 @@ class _MelodicPerceptionExerciseScreenState
                       child: ValueListenableBuilder<int>(
                         valueListenable: _beatCountNotifier,
                         builder: (context, beat, child) {
+                          // Lógica do metrônomo visual (permanece a mesma)
                           return AnimatedOpacity(
                             opacity: beat == 0 ? 0.0 : 1.0,
                             duration: const Duration(milliseconds: 200),
@@ -609,8 +550,7 @@ class _MelodicPerceptionExerciseScreenState
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.accent
-                                        .withAlpha((255 * 0.7).round()),
+                                    color: AppColors.accent.withAlpha(180),
                                     blurRadius: 15.0,
                                     spreadRadius: 2.0,
                                   ),
@@ -647,24 +587,31 @@ class _MelodicPerceptionExerciseScreenState
                 ),
               ),
               MelodicInputPanel(
-                notePalette: _octaveAdjustedNotePalette,
+                notePalette: viewModel.octaveAdjustedNotePalette,
                 figurePalette: _figureSymbols,
                 restPalette: _restSymbols,
-                selectedNote: _selectedNote,
-                selectedFigure: _selectedFigure,
-                isVerified: _isVerified,
-                onNoteSelected: (note) => setState(() =>
-                    _selectedNote = note.replaceAll(RegExp(r'[0-9]'), '')),
-                onFigureSelected: (figure) =>
-                    setState(() => _selectedFigure = figure),
-                onAddNote: _addNoteToSequence,
-                onAddRest: _addRest,
+                selectedNote: viewModel.selectedNote,
+                selectedFigure: viewModel.selectedFigure,
+                isVerified: viewModel.isVerified,
+                onNoteSelected:
+                    context.read<MelodicExerciseViewModel>().onNoteSelected,
+                onFigureSelected:
+                    context.read<MelodicExerciseViewModel>().onFigureSelected,
+                onAddNote: () {
+                  context.read<MelodicExerciseViewModel>().addNoteToSequence();
+                },
+                onAddRest: () {
+                  context.read<MelodicExerciseViewModel>().addRest();
+                },
                 onVerify: _verifyAnswer,
-                displayOctave: _displayOctave,
-                onOctaveUp: _onOctaveUp,
-                onOctaveDown: _onOctaveDown,
-                currentAccidental: _currentAccidental,
-                onAccidentalSelected: _onAccidentalSelected,
+                displayOctave: viewModel.displayOctave,
+                onOctaveUp: context.read<MelodicExerciseViewModel>().onOctaveUp,
+                onOctaveDown:
+                    context.read<MelodicExerciseViewModel>().onOctaveDown,
+                currentAccidental: viewModel.currentAccidental,
+                onAccidentalSelected: context
+                    .read<MelodicExerciseViewModel>()
+                    .onAccidentalSelected,
               ),
             ],
           ),

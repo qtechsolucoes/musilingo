@@ -15,8 +15,10 @@ class LessonNodeWidget extends StatelessWidget {
   final NodePosition position;
   final VoidCallback? onLessonCompleted;
 
+  // --- ADIÇÃO ---
+  // A key nos permitirá identificar este widget na árvore de widgets.
   const LessonNodeWidget({
-    super.key,
+    super.key, // O super.key já faz o trabalho de uma GlobalKey quando fornecida.
     required this.lesson,
     required this.isCompleted,
     required this.isLocked,
@@ -72,8 +74,7 @@ class LessonNodeWidget extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: nodeColor.withAlpha(
-                        (255 * 0.5).round()), // Correção de 'withOpacity'
+                    color: nodeColor.withAlpha(128),
                     blurRadius: 10,
                     spreadRadius: 2,
                   ),

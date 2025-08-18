@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:musilingo/app/data/models/user_profile_model.dart';
 import 'package:musilingo/app/services/database_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // <-- IMPORT CORRIGIDO
+import 'package:musilingo/main.dart'; // Import para acesso ao 'supabase'
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UserSession extends ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService();
@@ -97,33 +98,49 @@ class UserSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  void answerCorrectly() {
+  // --- MÉTODO ATUALIZADO ---
+  // Usa a função RPC 'handle_correct_answer' para segurança e performance.
+  Future<void> answerCorrectly() async {
     if (_currentUser == null) return;
-    _currentUser = _currentUser!.copyWith(
-      points: _currentUser!.points + 10,
-      correctAnswers: _currentUser!.correctAnswers + 1,
-    );
-    _databaseService.updateStats(
-      userId: _currentUser!.id,
-      points: _currentUser!.points,
-      correctAnswers: _currentUser!.correctAnswers,
-    );
-    _databaseService.upsertWeeklyXp(_currentUser!.id, 10);
-    notifyListeners();
+
+    try {
+      // Chama a função RPC no Supabase com a quantidade de pontos
+      await supabase
+          .rpc('handle_correct_answer', params: {'p_points_to_add': 10});
+
+      // Atualiza o estado local para refletir a mudança imediatamente na UI
+      _currentUser = _currentUser!.copyWith(
+        points: _currentUser!.points + 10,
+        correctAnswers: _currentUser!.correctAnswers + 1,
+      );
+
+      // Notifica os widgets que estão ouvindo para reconstruir com os novos valores.
+      notifyListeners();
+    } catch (error) {
+      debugPrint("Erro ao chamar handle_correct_answer: $error");
+      // Opcional: Adicionar lógica para reverter o estado local se a chamada falhar
+    }
   }
 
-  void answerWrongly() {
+  // --- MÉTODO ATUALIZADO ---
+  // Usa a função RPC 'handle_wrong_answer' para segurança e consistência.
+  Future<void> answerWrongly() async {
     if (_currentUser == null || _currentUser!.lives <= 0) return;
-    _currentUser = _currentUser!.copyWith(
-      lives: _currentUser!.lives - 1,
-      wrongAnswers: _currentUser!.wrongAnswers + 1,
-    );
-    _databaseService.updateStats(
-      userId: _currentUser!.id,
-      lives: _currentUser!.lives,
-      wrongAnswers: _currentUser!.wrongAnswers,
-    );
-    notifyListeners();
+
+    try {
+      // Chama a função RPC no Supabase
+      await supabase.rpc('handle_wrong_answer');
+
+      // Atualiza o estado local para refletir a mudança imediatamente na UI
+      _currentUser = _currentUser!.copyWith(
+        lives: _currentUser!.lives - 1,
+        wrongAnswers: _currentUser!.wrongAnswers + 1,
+      );
+
+      notifyListeners();
+    } catch (error) {
+      debugPrint("Erro ao chamar handle_wrong_answer: $error");
+    }
   }
 
   Future<void> updateAvatar(File image) async {
@@ -136,6 +153,7 @@ class UserSession extends ChangeNotifier {
       _currentUser = _currentUser!.copyWith(avatarUrl: newAvatarUrl);
     } catch (e) {
       // Tratar erro, se necessário
+      debugPrint("Erro ao atualizar avatar: $e");
     }
     _isLoading = false;
     notifyListeners();

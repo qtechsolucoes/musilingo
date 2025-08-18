@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
+import 'package:musilingo/app/data/models/module_model.dart'; // Import do ModuleModel
 import 'package:musilingo/app/presentation/view/splash_screen.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
@@ -10,11 +11,7 @@ import 'package:musilingo/features/home/presentation/widgets/world_widget.dart';
 import 'package:musilingo/main.dart';
 import 'package:provider/provider.dart';
 
-class World {
-  final int index;
-  final List<Lesson> lessons;
-  World({required this.index, required this.lessons});
-}
+// A classe 'World' foi removida, pois não é mais necessária.
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,32 +30,24 @@ class _HomeScreenState extends State<HomeScreen> {
     _homeDataFuture = _fetchHomeData();
   }
 
+  // --- LÓGICA DE BUSCA DE DADOS SIMPLIFICADA E CORRIGIDA ---
   Future<Map<String, dynamic>> _fetchHomeData() async {
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) throw 'Utilizador não autenticado.';
 
+      // A busca já nos traz os módulos com suas respectivas lições aninhadas.
       final modules = await _databaseService.getModulesAndLessons();
       final completedLessonIds =
           await _databaseService.getCompletedLessonIds(userId);
 
+      // Criamos uma lista plana de todas as lições para a lógica de desbloqueio.
       final allLessons = modules.expand((module) => module.lessons).toList();
-      final List<World> worlds = [];
-      const int lessonsPerWorld = 10;
 
-      for (int i = 0; i < allLessons.length; i += lessonsPerWorld) {
-        final end = (i + lessonsPerWorld > allLessons.length)
-            ? allLessons.length
-            : i + lessonsPerWorld;
-        worlds.add(World(
-          index: worlds.length,
-          lessons: allLessons.sublist(i, end),
-        ));
-      }
       return {
-        'worlds': worlds,
+        'modules': modules, // Passamos a lista de módulos diretamente
         'completedLessonIds': completedLessonIds,
-        'allLessons': allLessons,
+        'allLessons': allLessons, // Passamos a lista completa para referência
       };
     } catch (error, stackTrace) {
       debugPrint("Erro detalhado ao buscar dados: $error");
@@ -157,32 +146,53 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           final data = snapshot.data!;
-          final worlds = data['worlds'] as List<World>;
+          final modules = data['modules'] as List<Module>;
           final completedLessonIds = data['completedLessonIds'] as Set<int>;
           final allLessons = data['allLessons'] as List<Lesson>;
 
-          int initialWorldIndex = 0;
-          if (worlds.isNotEmpty) {
+          // Lógica para encontrar o módulo inicial a ser exibido
+          int initialModuleIndex = 0;
+          if (modules.isNotEmpty) {
             int lastCompletedLessonIndex = allLessons.lastIndexWhere(
                 (lesson) => completedLessonIds.contains(lesson.id));
+
             if (lastCompletedLessonIndex != -1) {
-              const int lessonsPerWorld = 10;
-              initialWorldIndex = lastCompletedLessonIndex ~/ lessonsPerWorld;
+              final lastCompletedLessonId =
+                  allLessons[lastCompletedLessonIndex].id;
+              // Encontra o próximo módulo a ser exibido
+              for (int i = 0; i < modules.length; i++) {
+                if (modules[i]
+                    .lessons
+                    .any((l) => l.id == lastCompletedLessonId)) {
+                  // Se a lição completada for a última do módulo, avança para o próximo.
+                  if (modules[i].lessons.last.id == lastCompletedLessonId &&
+                      i + 1 < modules.length) {
+                    initialModuleIndex = i + 1;
+                  } else {
+                    initialModuleIndex = i;
+                  }
+                  break;
+                }
+              }
             }
           }
 
-          final pageController = PageController(initialPage: initialWorldIndex);
+          final pageController =
+              PageController(initialPage: initialModuleIndex);
 
           return PageView.builder(
             controller: pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: worlds.length,
+            physics:
+                const BouncingScrollPhysics(), // Melhoramos a física do PageView
+            itemCount: modules.length,
             itemBuilder: (context, index) {
-              final world = worlds[index];
+              final module = modules[index];
               return WorldWidget(
-                world: world,
+                module: module, // Passamos o objeto Module
+                allLessons: allLessons, // Passamos a lista completa de lições
                 completedLessonIds: completedLessonIds,
-                isLastWorld: index == worlds.length - 1,
+                isFirstModule: index == 0,
+                isLastModule: index == modules.length - 1,
                 pageController: pageController,
                 onLessonCompleted: _refreshData,
               );

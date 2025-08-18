@@ -44,7 +44,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         currentIndex: _currentIndex,
         onTap: _onTabTapped,
         type: BottomNavigationBarType.fixed,
-        backgroundColor: AppColors.card,
+        backgroundColor: const Color.fromARGB(255, 28, 28, 60),
         selectedItemColor: AppColors.accent,
         unselectedItemColor: AppColors.textSecondary,
         items: const [
