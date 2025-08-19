@@ -1,8 +1,7 @@
-// lib/app/presentation/view/main_navigation_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
-import 'package:musilingo/features/challenges/presentation/view/challenges_screen.dart'; // IMPORTADO
+import 'package:musilingo/app/services/sfx_service.dart'; // SFX Service importado
+import 'package:musilingo/features/challenges/presentation/view/challenges_screen.dart';
 import 'package:musilingo/features/home/presentation/view/home_screen.dart';
 import 'package:musilingo/features/leagues/presentation/view/leagues_screen.dart';
 import 'package:musilingo/features/practice/presentation/view/practice_screen.dart';
@@ -18,19 +17,25 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
-  // **** NOVA TELA ADICIONADA À LISTA ****
   final List<Widget> _screens = [
     const HomeScreen(),
     const PracticeScreen(),
-    const ChallengesScreen(), // TELA DE DESAFIOS
+    const ChallengesScreen(),
     const LeaguesScreen(),
     const ProfileScreen(),
   ];
 
   void _onTabTapped(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
+    // AJUSTE REALIZADO AQUI
+    // Adicionamos a chamada ao serviço de som e verificamos se o
+    // índice foi realmente alterado para evitar sons desnecessários.
+    if (_currentIndex != index) {
+      SfxService.instance.playClick();
+      setState(() {
+        _currentIndex = index;
+      });
+    }
+    // FIM DO AJUSTE
   }
 
   @override
@@ -56,7 +61,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             icon: Icon(Icons.music_note),
             label: 'Prática',
           ),
-          // **** NOVO ITEM NA BARRA DE NAVEGAÇÃO ****
           BottomNavigationBarItem(
             icon: Icon(Icons.shield),
             label: 'Desafios',

@@ -1,8 +1,7 @@
-// lib/features/challenges/presentation/view/challenges_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
-import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart'; // Import necessário
+import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/features/duel/presentation/view/duel_lobby_screen.dart';
 
 class ChallengesScreen extends StatelessWidget {
@@ -10,73 +9,78 @@ class ChallengesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // AJUSTE 1: O Scaffold agora está dentro do nosso GradientBackground
+    // e com o fundo transparente para que o gradiente apareça.
     return GradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           title: const Text('Desafios'),
+          centerTitle: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
         ),
-        body: ListView(
-          padding: const EdgeInsets.all(16.0),
-          children: [
-            _buildChallengeCard(
-              context: context,
-              icon: Icons.shield,
-              title: 'Duelo dos Mestres',
-              description: 'Desafie outro músico em um quiz em tempo real!',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const DuelLobbyScreen(),
+        body: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    SfxService.instance.playClick();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const DuelLobbyScreen()),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    // AJUSTE 2: A decoração foi alterada para usar a cor sólida
+                    // AppColors.card, padronizando com a tela de Prática.
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          // ignore: deprecated_member_use
+                          color: Colors.black.withOpacity(0.2),
+                          spreadRadius: 1,
+                          blurRadius: 5,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    // FIM DO AJUSTE
+                    child: Column(
+                      children: [
+                        Text(
+                          'Duelo dos Mestres',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'desafie outro musico em um quiz em tempo real!',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              // ignore: deprecated_member_use
+                              ?.copyWith(color: Colors.white.withOpacity(0.9)),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChallengeCard({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String description,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      // CORREÇÃO: Usando a cor com opacidade definida no tema
-      color: Theme.of(context).cardColor.withAlpha(200),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Row(
-            children: [
-              Icon(icon, size: 40, color: AppColors.accent),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(description,
-                        style: const TextStyle(color: AppColors.textSecondary)),
-                  ],
                 ),
-              ),
-              const Icon(Icons.arrow_forward_ios,
-                  color: AppColors.textSecondary),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -1,17 +1,13 @@
-// lib/features/home/presentation/view/home_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
-import 'package:musilingo/app/data/models/module_model.dart'; // Import do ModuleModel
+import 'package:musilingo/app/data/models/module_model.dart';
 import 'package:musilingo/app/presentation/view/splash_screen.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/home/presentation/widgets/world_widget.dart';
 import 'package:musilingo/main.dart';
 import 'package:provider/provider.dart';
-
-// A classe 'World' foi removida, pois não é mais necessária.
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -30,24 +26,18 @@ class _HomeScreenState extends State<HomeScreen> {
     _homeDataFuture = _fetchHomeData();
   }
 
-  // --- LÓGICA DE BUSCA DE DADOS SIMPLIFICADA E CORRIGIDA ---
   Future<Map<String, dynamic>> _fetchHomeData() async {
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) throw 'Utilizador não autenticado.';
-
-      // A busca já nos traz os módulos com suas respectivas lições aninhadas.
       final modules = await _databaseService.getModulesAndLessons();
       final completedLessonIds =
           await _databaseService.getCompletedLessonIds(userId);
-
-      // Criamos uma lista plana de todas as lições para a lógica de desbloqueio.
       final allLessons = modules.expand((module) => module.lessons).toList();
-
       return {
-        'modules': modules, // Passamos a lista de módulos diretamente
+        'modules': modules,
         'completedLessonIds': completedLessonIds,
-        'allLessons': allLessons, // Passamos a lista completa para referência
+        'allLessons': allLessons,
       };
     } catch (error, stackTrace) {
       debugPrint("Erro detalhado ao buscar dados: $error");
@@ -71,8 +61,12 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        title: const Text('Trilha de Aprendizagem',
+        // AJUSTE REALIZADO AQUI
+        // O título foi alterado de 'Trilha de Aprendizagem'
+        // para 'Jornada Musical' para melhor visualização.
+        title: const Text('Jornada Musical',
             style: TextStyle(fontWeight: FontWeight.bold)),
+        // FIM DO AJUSTE
         actions: [
           Row(children: [
             const Icon(Icons.local_fire_department, color: Colors.orangeAccent),
@@ -150,7 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
           final completedLessonIds = data['completedLessonIds'] as Set<int>;
           final allLessons = data['allLessons'] as List<Lesson>;
 
-          // Lógica para encontrar o módulo inicial a ser exibido
           int initialModuleIndex = 0;
           if (modules.isNotEmpty) {
             int lastCompletedLessonIndex = allLessons.lastIndexWhere(
@@ -159,12 +152,10 @@ class _HomeScreenState extends State<HomeScreen> {
             if (lastCompletedLessonIndex != -1) {
               final lastCompletedLessonId =
                   allLessons[lastCompletedLessonIndex].id;
-              // Encontra o próximo módulo a ser exibido
               for (int i = 0; i < modules.length; i++) {
                 if (modules[i]
                     .lessons
                     .any((l) => l.id == lastCompletedLessonId)) {
-                  // Se a lição completada for a última do módulo, avança para o próximo.
                   if (modules[i].lessons.last.id == lastCompletedLessonId &&
                       i + 1 < modules.length) {
                     initialModuleIndex = i + 1;
@@ -182,14 +173,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
           return PageView.builder(
             controller: pageController,
-            physics:
-                const BouncingScrollPhysics(), // Melhoramos a física do PageView
+            physics: const BouncingScrollPhysics(),
             itemCount: modules.length,
             itemBuilder: (context, index) {
               final module = modules[index];
               return WorldWidget(
-                module: module, // Passamos o objeto Module
-                allLessons: allLessons, // Passamos a lista completa de lições
+                module: module,
+                allLessons: allLessons,
                 completedLessonIds: completedLessonIds,
                 isFirstModule: index == 0,
                 isLastModule: index == modules.length - 1,

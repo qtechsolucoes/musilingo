@@ -1,5 +1,3 @@
-// lib/features/home/presentation/widgets/world_widget.dart
-
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/lesson_model.dart';
@@ -201,22 +199,12 @@ class _WorldWidgetState extends State<WorldWidget> {
   }
 }
 
-// --- PINTOR DE CAMINHO COM AJUSTE FINO DE ALTURA ---
 class PathPainter extends CustomPainter {
   final List<Offset> nodePositions;
-
-  // --- ÁREA DE AJUSTE ---
   final double nodeRadius = 35.0;
   final double cornerRadius = 30.0;
   final double strokeWidth = 8.0;
-
-  // AQUI ESTÁ O AJUSTE QUE VOCÊ PROCURA!
-  // Use este valor para subir ou descer o ponto de partida da linha.
-  // - Um valor NEGATIVO sobe a linha.
-  // - Um valor POSITIVO desce a linha.
-  // Comece com -5.0 e ajuste conforme necessário.
   final double verticalOffset = -20.0;
-  // ----------------------
 
   PathPainter({required this.nodePositions});
 
@@ -226,44 +214,37 @@ class PathPainter extends CustomPainter {
       return;
     }
 
+    // AJUSTE REALIZADO AQUI
+    // A cor foi alterada de AppColors.primary para um branco semitransparente
+    // para uma melhor integração visual com o fundo gradiente.
     final paint = Paint()
-      ..color = AppColors.primary
+      // ignore: deprecated_member_use
+      ..color = Colors.white.withOpacity(0.4) // Cor da linha alterada
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
+    // FIM DO AJUSTE
 
     for (int i = 0; i < nodePositions.length - 1; i++) {
       final startOffset = nodePositions[i];
       final endOffset = nodePositions[i + 1];
-
       final bool isMovingRight = endOffset.dx > startOffset.dx;
-
       final path = Path();
-
-      // A MUDANÇA ACONTECE AQUI!
-      // Adicionamos o 'verticalOffset' à coordenada Y do ponto de partida.
       final startPoint = Offset(
           startOffset.dx + (isMovingRight ? nodeRadius : -nodeRadius),
-          startOffset.dy + verticalOffset // <-- AJUSTE APLICADO AQUI
-          );
-
+          startOffset.dy + verticalOffset);
       final endPoint = Offset(endOffset.dx, endOffset.dy - nodeRadius);
-
       path.moveTo(startPoint.dx, startPoint.dy);
-
       final horizontalLineEndX =
           endPoint.dx + (isMovingRight ? -cornerRadius : cornerRadius);
       path.lineTo(horizontalLineEndX, startPoint.dy);
-
       final arcEndPoint = Offset(endPoint.dx, startPoint.dy + cornerRadius);
       path.arcToPoint(
         arcEndPoint,
         radius: Radius.circular(cornerRadius),
         clockwise: isMovingRight,
       );
-
       path.lineTo(endPoint.dx, endPoint.dy);
-
       canvas.drawPath(path, paint);
     }
   }
