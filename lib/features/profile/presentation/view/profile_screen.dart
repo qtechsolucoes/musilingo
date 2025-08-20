@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/presentation/view/splash_screen.dart';
-import 'package:musilingo/app/presentation/widgets/gradient_background.dart'; // Import adicionado
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
 import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/main.dart';
@@ -40,7 +40,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = userSession.currentUser;
 
     if (user == null) {
-      // --- CORREÇÃO APLICADA AQUI ---
       return const GradientBackground(
         child: Scaffold(
           backgroundColor: Colors.transparent,
@@ -49,10 +48,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // --- CORREÇÃO APLICADA AQUI ---
     return GradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        // ESTA APPBAR GARANTE QUE O BOTÃO "VOLTAR" APAREÇA
         appBar: AppBar(
           title: const Text('Perfil',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),

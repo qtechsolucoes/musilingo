@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/weekly_xp_model.dart';
-import 'package:musilingo/app/presentation/widgets/gradient_background.dart'; // Import adicionado
+import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
 import 'package:musilingo/app/services/database_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/leagues/presentation/widgets/league_list_item_widget.dart';
@@ -34,10 +34,10 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
     final user = context.watch<UserSession>().currentUser;
     final userLeague = user?.league ?? 'Bronze';
 
-    // --- CORREÇÃO APLICADA AQUI ---
     return GradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        // ESTA APPBAR GARANTE QUE O BOTÃO "VOLTAR" APAREÇA QUANDO A TELA É NAVEGADA
         appBar: AppBar(
           title: Text('Liga $userLeague',
               style:
@@ -61,7 +61,6 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
             }
 
             final leaderboard = snapshot.data!;
-            // Acessamos o ID através do objeto profile aninhado
             final currentUserRanking = leaderboard
                 .indexWhere((xpData) => xpData.profile.id == user?.id);
 
@@ -73,7 +72,7 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
                 final xpData = leaderboard[index];
                 return LeagueListItemWidget(
                   rank: index + 1,
-                  leaderboardEntry: xpData, // <-- Passamos o objeto completo
+                  leaderboardEntry: xpData,
                   isCurrentUser: currentUserRanking == index,
                 );
               },

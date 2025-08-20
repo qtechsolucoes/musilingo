@@ -64,8 +64,8 @@ class _HomeScreenState extends State<HomeScreen> {
         // AJUSTE REALIZADO AQUI
         // O título foi alterado de 'Trilha de Aprendizagem'
         // para 'Jornada Musical' para melhor visualização.
-        title: const Text('Jornada Musical',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title:
+            const Text('Trilha', style: TextStyle(fontWeight: FontWeight.bold)),
         // FIM DO AJUSTE
         actions: [
           Row(children: [

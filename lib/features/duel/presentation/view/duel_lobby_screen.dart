@@ -106,7 +106,7 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen> {
         ElevatedButton(
           onPressed: _startSearch,
           style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
+              backgroundColor: AppColors.primary,
               padding:
                   const EdgeInsets.symmetric(horizontal: 48, vertical: 16)),
           child: const Text('Procurar Duelo', style: TextStyle(fontSize: 18)),
