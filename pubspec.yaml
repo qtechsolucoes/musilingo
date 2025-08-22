@@ -34,9 +34,9 @@ dependencies:
   audioplayers: ^6.5.0
   
   # NOVA DEPENDÊNCIA PARA O SOLFEJO
-  simple_sheet_music: ^0.2.2
-  pitch_detector_dart: ^1.1.1
-  microphone: ^1.2.0
+  simple_sheet_music: ^1.0.1
+  pitch_detector_dart: ^0.0.7
+  flutter_sound_record: ^3.3.2
 
 dev_dependencies:
   flutter_test:
