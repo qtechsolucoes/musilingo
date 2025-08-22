@@ -14,9 +14,8 @@ import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/practice/presentation/viewmodel/melodic_exercise_viewmodel.dart';
 import 'package:musilingo/features/practice/presentation/widgets/melodic_input_panel.dart';
 import 'package:provider/provider.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
-// Funções utilitárias permanecem fora da classe
+// A classe MusicUtils permanece, pois é útil para a lógica de MIDI.
 class MusicUtils {
   static const Map<String, int> _noteValues = {
     'C': 0,
@@ -57,7 +56,6 @@ class MusicUtils {
   };
 }
 
-/// Widget principal que configura o Provider. Agora é um StatelessWidget.
 class MelodicPerceptionExerciseScreen extends StatelessWidget {
   final MelodicExercise exercise;
   const MelodicPerceptionExerciseScreen({super.key, required this.exercise});
@@ -71,7 +69,6 @@ class MelodicPerceptionExerciseScreen extends StatelessWidget {
   }
 }
 
-/// Widget interno que constrói a UI e gerencia os controladores da UI.
 class _MelodicExerciseView extends StatefulWidget {
   const _MelodicExerciseView();
 
@@ -80,27 +77,24 @@ class _MelodicExerciseView extends StatefulWidget {
 }
 
 class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
-  // Apenas estado relacionado à UI (controladores) permanece aqui.
-  late final WebViewController _webViewController;
+  // REMOVIDO: Toda a lógica relacionada à WebView e ao ScoreViewer foi retirada.
   final _midiPro = MidiPro();
   int? _instrumentSoundfontId;
   int? _percussionSoundfontId;
   late ConfettiController _confettiController;
 
-  bool _isWebViewReady = false;
   bool _isSoundfontReady = false;
   bool _isMetronomeEnabled = true;
   final ValueNotifier<int> _beatCountNotifier = ValueNotifier(0);
 
-  // Símbolos para a UI
   static final Map<String, String> _figureSymbols = {
     'whole': '𝅝',
-    'half': '𝅗𝅥',
-    'quarter': '𝅘𝅥',
-    'eighth': '𝅘𝅥𝅮',
-    '16th': '𝅘𝅥𝅯',
-    '32nd': '𝅘𝅥𝅰',
-    '64th': '𝅘𝅥𝅱',
+    'half': '𝅗𝅥',
+    'quarter': '𝅘𝅥',
+    'eighth': '𝅘𝅥𝅮',
+    '16th': '𝅘𝅥𝅯',
+    '32nd': '𝅘𝅥𝅰',
+    '64th': '𝅘𝅥𝅱',
   };
   static final Map<String, String> _restSymbols = {
     'whole': '𝄻',
@@ -134,18 +128,6 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
       DeviceOrientation.landscapeLeft,
     ]);
     await _initializeAudio();
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.transparent)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (String url) {
-            if (mounted) setState(() => _isWebViewReady = true);
-            _renderUserSequence();
-          },
-        ),
-      )
-      ..loadFlutterAsset('assets/web/index.html');
   }
 
   Future<void> _initializeAudio() async {
@@ -167,101 +149,11 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
     }
   }
 
-  void _renderUserSequence(
-      {String Function(String note, bool isCorrect)? colorizer}) {
-    if (!_isWebViewReady) return;
-
-    // Lê a sequência do ViewModel em vez do estado local
-    final viewModel = context.read<MelodicExerciseViewModel>();
-    final userSequence = viewModel.userSequence;
-    final exercise = viewModel.exercise;
-
-    final timeSignatureParts = exercise.timeSignature.split('/');
-    final beatsPerMeasure = double.parse(timeSignatureParts[0]);
-    final beatType = double.parse(timeSignatureParts[1]);
-    final measureCapacity = beatsPerMeasure * (4.0 / beatType);
-
-    StringBuffer measuresXml = StringBuffer();
-    int measureCount = 1;
-    double currentMeasureDuration = 0.0;
-    measuresXml.write('<measure number="$measureCount">');
-    measuresXml.write(
-        '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>${beatsPerMeasure.toInt()}</beats><beat-type>${beatType.toInt()}</beat-type></time><clef><sign>${exercise.clef == 'treble' ? 'G' : 'F'}</sign><line>${exercise.clef == 'treble' ? '2' : '4'}</line></clef></attributes>');
-
-    for (var entry in userSequence.asMap().entries) {
-      final index = entry.key;
-      final noteData = entry.value.split('_');
-      final noteName = noteData[0];
-      final figure = noteData[1];
-      final noteDuration =
-          (MusicUtils.figureDurations[figure] ?? 0.0) * (4.0 / beatType);
-
-      if (currentMeasureDuration + noteDuration > measureCapacity + 0.001) {
-        measuresXml.write('</measure>');
-        measureCount++;
-        measuresXml.write('<measure number="$measureCount">');
-        currentMeasureDuration = 0;
-      }
-      currentMeasureDuration += noteDuration;
-
-      String colorTag = "";
-      if (colorizer != null) {
-        final isCorrect = index < exercise.correctSequence.length &&
-            exercise.correctSequence[index] == entry.value;
-        colorTag = colorizer(entry.value, isCorrect);
-      }
-
-      final type = figure;
-      final xmlDuration = (MusicUtils.figureDurations[figure]! * 4).toInt();
-
-      if (noteName.contains("rest")) {
-        measuresXml.write(
-            '<note $colorTag><rest/><duration>$xmlDuration</duration><type>$type</type></note>');
-      } else {
-        String step = noteName.substring(0, 1);
-        final octave = noteName.substring(noteName.length - 1);
-        String alter = "0";
-        String accidental = "";
-        if (noteName.contains("#")) {
-          alter = "1";
-          accidental = "<accidental>sharp</accidental>";
-        } else if (noteName.contains("b")) {
-          alter = "-1";
-          accidental = "<accidental>flat</accidental>";
-        }
-        measuresXml.write(
-            """<note $colorTag><pitch><step>$step</step><alter>$alter</alter><octave>$octave</octave></pitch><duration>$xmlDuration</duration><type>$type</type>$accidental</note>""");
-      }
-    }
-    measuresXml.write(
-        '<barline location="right"><bar-style>light-heavy</bar-style></barline>');
-    measuresXml.write('</measure>');
-    final fullXml =
-        """<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"><score-partwise><part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list><part id="P1">${measuresXml.toString()}</part></score-partwise>""";
-    _loadScoreIntoWebView(fullXml);
-  }
-
-  void _loadScoreIntoWebView(String musicXml) {
-    if (_isWebViewReady) {
-      final escapedXml = musicXml
-          .replaceAll('\\', '\\\\')
-          .replaceAll("`", "\\`")
-          .replaceAll("\n", "")
-          .replaceAll("\r", "");
-      _webViewController.runJavaScript('window.loadScore(`$escapedXml`)');
-    }
-  }
-
   void _verifyAnswer() {
     final viewModel = context.read<MelodicExerciseViewModel>();
     final userSession = context.read<UserSession>();
-
     final isCorrect = viewModel.verifyAnswer();
-
-    // Re-renderiza a partitura com as cores de feedback
-    _renderUserSequence(
-        colorizer: (note, isCorrect) =>
-            'color="${isCorrect ? AppColors.completedHex : AppColors.errorHex}"');
+    setState(() {});
 
     if (isCorrect) {
       userSession.answerCorrectly();
@@ -279,14 +171,12 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
         _percussionSoundfontId == null) {
       return;
     }
-
     final exercise = context.read<MelodicExerciseViewModel>().exercise;
     final int bpm = exercise.tempo;
     final double beatDurationMs = 60000.0 / bpm;
     final timeSignatureParts = exercise.timeSignature.split('/');
     final beatsPerMeasure = int.parse(timeSignatureParts[0]);
 
-    // Lógica de reprodução de áudio... (permanece a mesma)
     for (int i = 0; i < beatsPerMeasure; i++) {
       _beatCountNotifier.value = i + 1;
       _midiPro.playNote(
@@ -341,7 +231,6 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
     _beatCountNotifier.value = 0;
   }
 
-  // Métodos que disparam a reprodução
   void _playExerciseMelody() {
     SfxService.instance.playClick();
     final exercise = context.read<MelodicExerciseViewModel>().exercise;
@@ -354,7 +243,6 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
     _playSequence(userSequence);
   }
 
-  // --- Diálogos de Feedback (permanecem praticamente os mesmos) ---
   Future<void> _showSuccessDialog() {
     _confettiController.play();
     return showDialog(
@@ -385,7 +273,6 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
                       onPressed: () {
                         SfxService.instance.playClick();
                         Navigator.of(context).pop();
-                        // Opcional: Navegar para fora da tela ou carregar próximo exercício
                       },
                       style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.completed),
@@ -421,9 +308,8 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
                       onPressed: () {
                         SfxService.instance.playClick();
                         Navigator.of(context).pop();
-                        // Chama o método reset do ViewModel
                         context.read<MelodicExerciseViewModel>().reset();
-                        _renderUserSequence(); // Renderiza a pauta vazia
+                        setState(() {});
                       },
                       child: const Text('Tentar Novamente'))
                 ]));
@@ -431,8 +317,7 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isWebViewReady || !_isSoundfontReady) {
-      // Tela de Loading... (permanece a mesma)
+    if (!_isSoundfontReady) {
       final exercise = context.read<MelodicExerciseViewModel>().exercise;
       return GradientBackground(
         child: Scaffold(
@@ -451,15 +336,7 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
                 ]))),
       );
     }
-
-    // Ouve o ViewModel para reconstruir quando o estado mudar.
     final viewModel = context.watch<MelodicExerciseViewModel>();
-
-    // Dispara a renderização sempre que a sequência do usuário mudar.
-    // Usamos um post-frame callback para evitar chamar setState durante o build.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _renderUserSequence();
-    });
 
     return GradientBackground(
       child: Scaffold(
@@ -518,17 +395,19 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
               Expanded(
                 child: Stack(
                   children: [
+                    // ÁREA DA PARTITURA - TEMPORARIAMENTE UM CONTAINER VAZIO
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                       child: Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
-                          // ignore: deprecated_member_use
-                          color: AppColors.background.withOpacity(0.5),
+                          color: AppColors.background.withAlpha(128),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: WebViewWidget(controller: _webViewController),
+                        child: const Center(
+                          child: Text(
+                            'A partitura aparecerá aqui em breve!',
+                            style: TextStyle(color: Colors.white54),
+                          ),
                         ),
                       ),
                     ),
@@ -538,7 +417,6 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
                       child: ValueListenableBuilder<int>(
                         valueListenable: _beatCountNotifier,
                         builder: (context, beat, child) {
-                          // Lógica do metrônomo visual (permanece a mesma)
                           return AnimatedOpacity(
                             opacity: beat == 0 ? 0.0 : 1.0,
                             duration: const Duration(milliseconds: 200),
