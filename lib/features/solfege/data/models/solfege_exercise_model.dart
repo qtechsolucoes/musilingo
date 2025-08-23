@@ -20,6 +20,8 @@ class SolfegeNote {
       lyric: map['lyric'] as String,
     );
   }
+
+  get pitchInHz => null;
 }
 
 // Classe que representa o exercício de solfejo completo
