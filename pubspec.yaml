@@ -34,9 +34,8 @@ dependencies:
   audioplayers: ^6.5.0
   
   # NOVA DEPENDÊNCIA PARA O SOLFEJO
-  simple_sheet_music: ^1.0.1
   pitch_detector_dart: ^0.0.7
-  flutter_sound_record: ^3.3.2
+  record: ^6.1.1
 
 dev_dependencies:
   flutter_test:
@@ -56,3 +55,5 @@ flutter:
     - assets/images/
     - assets/sf2/GeneralUserGS.sf2
     - assets/audio/
+    - assets/osmd_viewer/ # <--- SUBSTITUA a linha do score_renderer por esta
+    - assets/osmd_viewer/js/ # <--- E adicione esta

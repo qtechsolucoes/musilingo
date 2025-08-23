@@ -9,13 +9,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/data/models/melodic_exercise_model.dart';
 import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
+import 'package:musilingo/app/presentation/widgets/score_viewer_widget.dart';
 import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:musilingo/features/practice/presentation/viewmodel/melodic_exercise_viewmodel.dart';
 import 'package:musilingo/features/practice/presentation/widgets/melodic_input_panel.dart';
 import 'package:provider/provider.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
-// A classe MusicUtils permanece, pois é útil para a lógica de MIDI.
 class MusicUtils {
   static const Map<String, int> _noteValues = {
     'C': 0,
@@ -37,10 +38,14 @@ class MusicUtils {
     'B': 11
   };
   static int noteNameToMidi(String noteName) {
-    if (noteName.contains("rest")) return 0;
+    if (noteName.contains("rest")) {
+      return 0;
+    }
     final notePart = noteName.replaceAll(RegExp(r'[0-9]'), '');
     final octavePart = noteName.replaceAll(RegExp(r'[^0-9]'), '');
-    if (octavePart.isEmpty || !_noteValues.containsKey(notePart)) return 60;
+    if (octavePart.isEmpty || !_noteValues.containsKey(notePart)) {
+      return 60;
+    }
     final octave = int.parse(octavePart);
     return _noteValues[notePart]! + (octave + 1) * 12;
   }
@@ -77,11 +82,11 @@ class _MelodicExerciseView extends StatefulWidget {
 }
 
 class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
-  // REMOVIDO: Toda a lógica relacionada à WebView e ao ScoreViewer foi retirada.
   final _midiPro = MidiPro();
   int? _instrumentSoundfontId;
   int? _percussionSoundfontId;
   late ConfettiController _confettiController;
+  late final WebViewController _scoreController;
 
   bool _isSoundfontReady = false;
   bool _isMetronomeEnabled = true;
@@ -111,6 +116,12 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
     super.initState();
     _confettiController =
         ConfettiController(duration: const Duration(seconds: 1));
+
+    _scoreController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.transparent)
+      ..loadFlutterAsset('assets/osmd_viewer/index.html');
+
     _initializeScreen();
   }
 
@@ -149,10 +160,20 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
     }
   }
 
+  void _loadScore(String musicXml) {
+    final sanitizedXml = musicXml
+        .replaceAll('\\', '\\\\')
+        .replaceAll("'", "\\'")
+        .replaceAll('\n', '\\n')
+        .replaceAll('\r', '');
+    _scoreController.runJavaScript("loadScore('$sanitizedXml')");
+  }
+
   void _verifyAnswer() {
     final viewModel = context.read<MelodicExerciseViewModel>();
     final userSession = context.read<UserSession>();
     final isCorrect = viewModel.verifyAnswer();
+
     setState(() {});
 
     if (isCorrect) {
@@ -178,6 +199,7 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
     final beatsPerMeasure = int.parse(timeSignatureParts[0]);
 
     for (int i = 0; i < beatsPerMeasure; i++) {
+      if (!mounted) break;
       _beatCountNotifier.value = i + 1;
       _midiPro.playNote(
           sfId: _percussionSoundfontId!,
@@ -186,47 +208,54 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
           velocity: (i == 0) ? 127 : 100);
       await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
     }
+
     int currentBeat = 0;
     for (String noteData in sequence) {
+      if (!mounted) break;
       final parts = noteData.split('_');
       final noteName = parts[0];
       final durationName = parts[1];
       final midiNote = MusicUtils.noteNameToMidi(noteName);
       final beatDurationMultiplier =
           MusicUtils.figureDurations[durationName] ?? 1.0;
+
       if (_isMetronomeEnabled) {
-        _beatCountNotifier.value = (currentBeat % beatsPerMeasure) + 1;
-        _midiPro.playNote(
-            sfId: _percussionSoundfontId!,
-            channel: 9,
-            key: (currentBeat % beatsPerMeasure == 0) ? 76 : 77,
-            velocity: 100);
-      }
-      if (!noteName.contains("rest")) {
-        _midiPro.playNote(
-            sfId: _instrumentSoundfontId!,
-            channel: 0,
-            key: midiNote,
-            velocity: 127);
-      }
-      await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
-      for (int i = 1; i < beatDurationMultiplier; i++) {
-        if (_isMetronomeEnabled) {
+        for (int i = 0; i < beatDurationMultiplier; i++) {
+          if (!mounted) break;
           _beatCountNotifier.value = ((currentBeat + i) % beatsPerMeasure) + 1;
           _midiPro.playNote(
               sfId: _percussionSoundfontId!,
               channel: 9,
               key: ((currentBeat + i) % beatsPerMeasure == 0) ? 76 : 77,
               velocity: 100);
+          if (i == 0 && !noteName.contains("rest")) {
+            _midiPro.playNote(
+                sfId: _instrumentSoundfontId!,
+                channel: 0,
+                key: midiNote,
+                velocity: 127);
+          }
+          await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
         }
-        await Future.delayed(Duration(milliseconds: beatDurationMs.round()));
+      } else {
+        if (!noteName.contains("rest")) {
+          _midiPro.playNote(
+              sfId: _instrumentSoundfontId!,
+              channel: 0,
+              key: midiNote,
+              velocity: 127);
+        }
+        await Future.delayed(Duration(
+            milliseconds: (beatDurationMs * beatDurationMultiplier).round()));
       }
+
       if (!noteName.contains("rest")) {
         _midiPro.stopNote(
             sfId: _instrumentSoundfontId!, channel: 0, key: midiNote);
       }
       currentBeat += beatDurationMultiplier.round();
     }
+    if (!mounted) return;
     await Future.delayed(const Duration(milliseconds: 500));
     _beatCountNotifier.value = 0;
   }
@@ -309,7 +338,6 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
                         SfxService.instance.playClick();
                         Navigator.of(context).pop();
                         context.read<MelodicExerciseViewModel>().reset();
-                        setState(() {});
                       },
                       child: const Text('Tentar Novamente'))
                 ]));
@@ -332,11 +360,13 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
                     children: [
                   CircularProgressIndicator(color: AppColors.accent),
                   SizedBox(height: 16),
-                  Text("Carregando exercício...")
+                  Text("A carregar o exercício...")
                 ]))),
       );
     }
+
     final viewModel = context.watch<MelodicExerciseViewModel>();
+    _loadScore(viewModel.musicXml);
 
     return GradientBackground(
       child: Scaffold(
@@ -394,22 +424,10 @@ class _MelodicExerciseViewState extends State<_MelodicExerciseView> {
             children: [
               Expanded(
                 child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    // ÁREA DA PARTITURA - TEMPORARIAMENTE UM CONTAINER VAZIO
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: AppColors.background.withAlpha(128),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'A partitura aparecerá aqui em breve!',
-                            style: TextStyle(color: Colors.white54),
-                          ),
-                        ),
-                      ),
+                    ScoreViewerWidget(
+                      controller: _scoreController,
                     ),
                     Positioned(
                       top: 24,

@@ -1,39 +1,11 @@
 // lib/features/solfege/presentation/view/solfege_exercise_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:musilingo/app/core/theme/app_colors.dart';
 import 'package:musilingo/app/presentation/widgets/gradient_background.dart';
-import 'package:musilingo/app/presentation/widgets/time_signature_widget.dart';
+import 'package:musilingo/app/presentation/widgets/score_viewer_widget.dart';
 import 'package:musilingo/features/solfege/data/models/solfege_exercise_model.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
-import 'package:simple_sheet_music/simple_sheet_music.dart';
-
-// Extension para adicionar a propriedade `beats` ao enum NoteDuration
-extension on NoteDuration {
-  double get beats {
-    switch (this) {
-      case NoteDuration.whole:
-        return 4.0;
-      case NoteDuration.half:
-        return 2.0;
-      case NoteDuration.quarter:
-        return 1.0;
-      case NoteDuration.eighth:
-        return 0.5;
-      case NoteDuration.sixteenth:
-        return 0.25;
-      case NoteDuration.thirtySecond:
-        return 0.125;
-      default:
-        return 1.0;
-    }
-  }
-}
-
-// Extension para adicionar um método `close` que pode estar faltando na API
-extension on MidiPro {
-  void close() {}
-}
+import 'package:webview_flutter/webview_flutter.dart';
 
 class SolfegeExerciseScreen extends StatefulWidget {
   final SolfegeExercise exercise;
@@ -49,22 +21,108 @@ class SolfegeExerciseScreen extends StatefulWidget {
 
 class _SolfegeExerciseScreenState extends State<SolfegeExerciseScreen> {
   final _midiPro = MidiPro();
+  late final WebViewController _scoreController;
   int? _instrumentSoundfontId;
   bool _isSoundfontReady = false;
+  bool _isPlaying = false;
 
   @override
   void initState() {
     super.initState();
+
+    // Cria e configura o controller do WebView
+    _scoreController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.transparent)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (String url) {
+            // Quando a página HTML carregar, desenha a partitura
+            _loadScore();
+          },
+        ),
+      )
+      ..loadFlutterAsset('assets/osmd_viewer/index.html');
+
     _initializeAudio();
   }
 
-  @override
-  void dispose() {
-    _midiPro.close();
-    super.dispose();
+  String _convertExerciseToMusicXml(SolfegeExercise exercise) {
+    const durationMap = {
+      'whole': 'whole',
+      'half': 'half',
+      'quarter': 'quarter',
+      'eighth': 'eighth',
+      '16th': '16th',
+      '32nd': '32nd',
+    };
+
+    final notesXml = exercise.noteSequence.map((note) {
+      final pitch = note.pitch.replaceAll('sharp', '#').replaceAll('flat', 'b');
+      final step = pitch.substring(0, 1).toUpperCase();
+      final octave = pitch.replaceAll(RegExp(r'[^0-9]'), '');
+
+      String alter = '';
+      if (pitch.contains('#')) {
+        alter = '<alter>1</alter>';
+      } else if (pitch.contains('b')) {
+        alter = '<alter>-1</alter>';
+      }
+
+      final type = durationMap[note.duration.toLowerCase()] ?? 'quarter';
+
+      return '''
+        <note>
+          <pitch>
+            <step>$step</step>
+            $alter
+            <octave>$octave</octave>
+          </pitch>
+          <duration>1</duration> 
+          <type>$type</type>
+        </note>
+      ''';
+    }).join('');
+
+    return '''
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+      <score-partwise version="3.1">
+        <part-list>
+          <score-part id="P1">
+            <part-name>Music</part-name>
+          </score-part>
+        </part-list>
+        <part id="P1">
+          <measure number="1">
+            <attributes>
+              <divisions>1</divisions>
+              <key><fifths>0</fifths></key>
+              <time>
+                <beats>${exercise.timeSignature.split('/')[0]}</beats>
+                <beat-type>${exercise.timeSignature.split('/')[1]}</beat-type>
+              </time>
+              <clef>
+                <sign>${exercise.clef.toLowerCase() == 'treble' ? 'G' : 'F'}</sign>
+                <line>${exercise.clef.toLowerCase() == 'treble' ? '2' : '4'}</line>
+              </clef>
+            </attributes>
+            $notesXml
+          </measure>
+        </part>
+      </score-partwise>
+    ''';
   }
 
-  // --- FUNÇÕES DE ÁUDIO ---
+  void _loadScore() {
+    final musicXml = _convertExerciseToMusicXml(widget.exercise);
+    final sanitizedXml = musicXml
+        .replaceAll('\\', '\\\\')
+        .replaceAll("'", "\\'")
+        .replaceAll('\n', '\\n')
+        .replaceAll('\r', '');
+    _scoreController.runJavaScript("loadScore('$sanitizedXml')");
+  }
 
   Future<void> _initializeAudio() async {
     try {
@@ -82,42 +140,60 @@ class _SolfegeExerciseScreenState extends State<SolfegeExerciseScreen> {
     }
   }
 
-  int _noteToMidi(Pitch pitch) {
-    final octave = int.parse(pitch.name.substring(pitch.name.length - 1));
-    final noteName =
-        pitch.name.substring(0, pitch.name.length - 1).toUpperCase();
+  int _noteToMidi(String pitchStr) {
+    final noteString = pitchStr.toUpperCase();
+    final octave = int.parse(noteString.replaceAll(RegExp(r'[^0-9]'), ''));
+    final noteName = noteString.replaceAll(RegExp(r'[0-9]'), '');
 
     const noteValues = {
       'C': 0,
-      'CSHARP': 1,
+      'C#': 1,
       'D': 2,
-      'DSHARP': 3,
+      'D#': 3,
       'E': 4,
       'F': 5,
-      'FSHARP': 6,
+      'F#': 6,
       'G': 7,
-      'GSHARP': 8,
+      'G#': 8,
       'A': 9,
-      'ASHARP': 10,
-      'B': 11
+      'A#': 10,
+      'B': 11,
     };
 
-    final midiValue = noteValues[noteName] ?? 0;
+    final midiValue = noteValues[noteName.replaceAll("SHARP", "#")] ?? -1;
+    if (midiValue == -1) {
+      return 0;
+    }
     return midiValue + (octave + 1) * 12;
   }
 
   Future<void> _playMelody() async {
-    if (!_isSoundfontReady) return;
+    if (!_isSoundfontReady || _instrumentSoundfontId == null || _isPlaying) {
+      return;
+    }
+
+    setState(() => _isPlaying = true);
 
     final int bpm = widget.exercise.tempo;
     final double beatDurationMs = 60000.0 / bpm;
+    const beatsMap = {
+      'whole': 4.0,
+      'half': 2.0,
+      'quarter': 1.0,
+      'eighth': 0.5,
+      '16th': 0.25,
+      '32nd': 0.125,
+    };
 
-    for (var noteData in widget.exercise.noteSequence) {
-      final noteDuration = _getNoteDuration(noteData.duration);
-      final pitch = _getPitch(noteData.pitch);
-      final midiNote = _noteToMidi(pitch);
+    for (int i = 0; i < widget.exercise.noteSequence.length; i++) {
+      if (!mounted) {
+        break;
+      }
 
-      final durationInMs = (beatDurationMs * noteDuration.beats).round();
+      final noteData = widget.exercise.noteSequence[i];
+      final midiNote = _noteToMidi(noteData.pitch);
+      final numBeats = beatsMap[noteData.duration.toLowerCase()] ?? 1.0;
+      final durationInMs = (beatDurationMs * numBeats).round();
 
       if (midiNote > 0) {
         _midiPro.playNote(
@@ -125,7 +201,6 @@ class _SolfegeExerciseScreenState extends State<SolfegeExerciseScreen> {
             channel: 0,
             key: midiNote,
             velocity: 127);
-
         await Future.delayed(Duration(milliseconds: durationInMs));
         _midiPro.stopNote(
             sfId: _instrumentSoundfontId!, channel: 0, key: midiNote);
@@ -133,68 +208,14 @@ class _SolfegeExerciseScreenState extends State<SolfegeExerciseScreen> {
         await Future.delayed(Duration(milliseconds: durationInMs));
       }
     }
-  }
 
-  // --- FUNÇÕES DE CONVERSÃO ---
-
-  ClefType _getClefType(String clefStr) {
-    switch (clefStr.toLowerCase()) {
-      case 'bass':
-        return ClefType.bass;
-      case 'treble':
-      default:
-        return ClefType.treble;
+    if (mounted) {
+      setState(() => _isPlaying = false);
     }
-  }
-
-  NoteDuration _getNoteDuration(String durationStr) {
-    switch (durationStr.toLowerCase()) {
-      case 'whole':
-        return NoteDuration.whole;
-      case 'half':
-        return NoteDuration.half;
-      case 'eighth':
-        return NoteDuration.eighth;
-      case '16th':
-        return NoteDuration.sixteenth;
-      case '32nd':
-        return NoteDuration.thirtySecond;
-      case 'quarter':
-      default:
-        return NoteDuration.quarter;
-    }
-  }
-
-  Pitch _getPitch(String pitchStr) {
-    final formattedPitch = pitchStr.replaceAll('#', 'Sharp').toLowerCase();
-    return Pitch.values.firstWhere(
-      (p) => p.name == formattedPitch,
-      orElse: () => Pitch.c4,
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final clefType = _getClefType(widget.exercise.clef);
-
-    final timeSignatureParts = widget.exercise.timeSignature.split('/');
-    final topSignature = int.parse(timeSignatureParts[0]);
-    final bottomSignature = int.parse(timeSignatureParts[1]);
-
-    final musicalSymbols = [
-      Clef(clefType),
-      const KeySignature(KeySignatureType.cMajor),
-    ];
-
-    for (var solfegeNote in widget.exercise.noteSequence) {
-      musicalSymbols.add(
-        Note(
-          _getPitch(solfegeNote.pitch),
-          noteDuration: _getNoteDuration(solfegeNote.duration),
-        ),
-      );
-    }
-
     return GradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -203,48 +224,17 @@ class _SolfegeExerciseScreenState extends State<SolfegeExerciseScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           actions: [
-            // Botão de play para tocar a partitura
             IconButton(
-              icon: Icon(Icons.play_arrow,
+              icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow,
                   color: _isSoundfontReady ? Colors.white : Colors.white54),
               onPressed: _isSoundfontReady ? _playMelody : null,
+              tooltip: 'Ouvir Melodia',
             ),
           ],
         ),
         body: Center(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.all(16.0),
-            child: Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: AppColors.card.withAlpha(200),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SimpleSheetMusic(
-                    lineColor: Colors.white.withAlpha(220),
-                    measures: [
-                      Measure(musicalSymbols),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4.0, top: 28.0),
-                    child: TimeSignatureWidget(
-                      top: topSignature,
-                      bottom: bottomSignature,
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  )
-                ],
-              ),
-            ),
+          child: ScoreViewerWidget(
+            controller: _scoreController,
           ),
         ),
       ),
