@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:musilingo/app/core/theme/app_colors.dart';
+import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/features/solfege/data/models/solfege_exercise_model.dart';
 
 // Enum para representar o estado do exercício
@@ -36,30 +37,23 @@ class NoteResult {
     return (userPitch >= targetPitch - tolerance) &&
         (userPitch <= targetPitch + tolerance);
   }
+
+  // Adicionamos um getter para verificar se o nome está correto
+  bool get wasNameCorrect {
+    return nameError == null;
+  }
 }
 
 class SolfegeExerciseViewModel extends ChangeNotifier {
   final SolfegeExercise exercise;
-  static const Map<String, double> _noteNamesToFrequency = {
-    'C': 261.63,
-    'C#': 277.18,
-    'D': 293.66,
-    'D#': 311.13,
-    'E': 329.63,
-    'F': 349.23,
-    'F#': 369.99,
-    'G': 392.00,
-    'G#': 415.30,
-    'A': 440.00,
-    'A#': 466.16,
-    'B': 493.88,
-  };
 
   SolfegeState _state = SolfegeState.idle;
   int _countdownValue = 0;
   int _currentNoteIndex = -1;
   final List<NoteResult> _results = [];
   String _feedbackMessage = '';
+  int _score = 0;
+  String _lastRecognizedWord = '';
 
   SolfegeExerciseViewModel({required this.exercise});
 
@@ -69,6 +63,7 @@ class SolfegeExerciseViewModel extends ChangeNotifier {
   int get currentNoteIndex => _currentNoteIndex;
   List<NoteResult> get results => _results;
   String get feedbackMessage => _feedbackMessage;
+  int get score => _score;
 
   String get musicXml {
     return _convertExerciseToMusicXml(exercise, _currentNoteIndex, _results);
@@ -83,6 +78,7 @@ class SolfegeExerciseViewModel extends ChangeNotifier {
 
     for (int i = beats; i > 0; i--) {
       _countdownValue = i;
+      SfxService.instance.playClick(); // Toca o clique do metrônomo
       notifyListeners();
       await Future.delayed(beatDuration);
     }
@@ -98,86 +94,152 @@ class SolfegeExerciseViewModel extends ChangeNotifier {
     _startNoteAdvanceEngine();
   }
 
-  // Novo: o motor de jogo que avança as notas no tempo
   Future<void> _startNoteAdvanceEngine() async {
     final tempo = exercise.tempo;
     final beatDuration = Duration(milliseconds: (60000 / tempo).round());
 
     for (int i = 0; i < exercise.noteSequence.length; i++) {
+      if (_state != SolfegeState.listening) break;
       _currentNoteIndex = i;
-      notifyListeners(); // Notifica para mudar a cor da nota
+      notifyListeners();
 
       final note = exercise.noteSequence[i];
-      final durationInBeats = _getDurationInBeats(note.duration);
+      final durationInBeats = getDurationInBeats(note.duration);
 
-      await Future.delayed(beatDuration * durationInBeats.round());
+      // Toca o metrônomo para cada tempo da nota
+      for (int beat = 0; beat < durationInBeats; beat++) {
+        if (_state != SolfegeState.listening) break;
+        SfxService.instance.playClick();
+        await Future.delayed(beatDuration);
+      }
 
-      // Simula a avaliação da nota aqui
-      // Por enquanto, vamos supor que a nota foi errada se nenhuma voz foi detectada
-      if (i == _currentNoteIndex) {
-        // Garante que não é uma nota que já foi cantada
+      // Se o usuário não cantou a tempo, a nota é marcada como errada
+      if (_state == SolfegeState.listening && _results.length == i) {
         advanceToNextNote(userPitch: 0, wasOnTime: false);
       }
+    }
+
+    if (_state == SolfegeState.listening) {
+      finishExercise();
     }
   }
 
   void processPitch(double pitch) {
-    if (_state != SolfegeState.listening || _currentNoteIndex == -1) return;
+    if (_state != SolfegeState.listening ||
+        _currentNoteIndex >= exercise.noteSequence.length ||
+        _results.length > _currentNoteIndex) {
+      return;
+    }
 
-    // Lógica para comparar o pitch e o nome da nota
     final currentNote = exercise.noteSequence[_currentNoteIndex];
-    final targetPitchHz = currentNote.pitchInHz;
-
     final noteResult = NoteResult(
       note: currentNote,
       userPitch: pitch,
-      wasOnTime: true, // Por enquanto, assumimos que sim
+      wasOnTime: true,
     );
 
-    // Se o pitch e o nome estiverem corretos, avança
     if (noteResult.wasPitchCorrect) {
       advanceToNextNote(userPitch: pitch, wasOnTime: true);
     } else {
-      // Regista o erro
       advanceToNextNote(userPitch: pitch, wasOnTime: true);
+    }
+  }
+
+  void processNoteName(String recognizedWords) {
+    final words = recognizedWords.split(' ');
+    if (words.isNotEmpty) {
+      _lastRecognizedWord = words.last;
     }
   }
 
   void advanceToNextNote({required double userPitch, required bool wasOnTime}) {
-    if (_currentNoteIndex >= exercise.noteSequence.length) return;
+    if (_currentNoteIndex >= exercise.noteSequence.length ||
+        _results.length > _currentNoteIndex) {
+      return;
+    }
 
     final currentNote = exercise.noteSequence[_currentNoteIndex];
+
+    final Map<String, String> noteNameToSyllable = {
+      'C': 'Dó',
+      'D': 'Ré',
+      'E': 'Mi',
+      'F': 'Fá',
+      'G': 'Sol',
+      'A': 'Lá',
+      'B': 'Si',
+    };
+
+    final expectedSyllable =
+        noteNameToSyllable[currentNote.pitch.substring(0, 1).toUpperCase()];
+    String? currentNameError;
+
+    if (wasOnTime &&
+        expectedSyllable != null &&
+        _lastRecognizedWord.toLowerCase() != expectedSyllable.toLowerCase()) {
+      currentNameError = 'Nome incorreto';
+    }
+
     final result = NoteResult(
       note: currentNote,
       userPitch: userPitch,
       wasOnTime: wasOnTime,
-      // Lógica mais detalhada para determinar o erro
       pitchError: userPitch == 0
           ? null
           : (userPitch > currentNote.pitchInHz ? 'acima' : 'abaixo'),
-      nameError: null, // A ser implementado
+      nameError: currentNameError,
       timingError: wasOnTime ? null : 'fora de tempo',
     );
     _results.add(result);
 
-    if (_currentNoteIndex < exercise.noteSequence.length - 1) {
-      _currentNoteIndex++;
-    } else {
-      finishExercise();
-    }
+    _lastRecognizedWord = '';
+
     notifyListeners();
   }
 
   void finishExercise() {
+    if (_state == SolfegeState.finished) return;
     _state = SolfegeState.finished;
     _currentNoteIndex = -1;
+    _calculateScore();
     _generateFeedbackMessage();
+
+    final correctNotesCount = _results
+        .where((r) => r.wasPitchCorrect && r.wasOnTime && r.wasNameCorrect)
+        .length;
+    if (correctNotesCount == _results.length && _results.isNotEmpty) {
+      SfxService.instance.playCorrectAnswer();
+    } else {
+      SfxService.instance.playError();
+    }
+
     notifyListeners();
   }
 
+  void _calculateScore() {
+    int calculatedScore = 0;
+    for (final result in _results) {
+      int noteScore = 0;
+      if (result.wasPitchCorrect) noteScore += 50;
+      if (result.wasNameCorrect) noteScore += 30;
+      if (result.wasOnTime) noteScore += 20;
+
+      if (result.wasPitchCorrect && result.wasNameCorrect && result.wasOnTime) {
+        noteScore += 50; // Bônus
+      }
+      calculatedScore += noteScore;
+    }
+    _score = calculatedScore;
+  }
+
   void _generateFeedbackMessage() {
-    final correctNotes =
-        _results.where((r) => r.wasPitchCorrect && r.wasOnTime).length;
+    final correctNotes = _results
+        .where((r) => r.wasPitchCorrect && r.wasOnTime && r.wasNameCorrect)
+        .length;
+    if (_results.isEmpty) {
+      _feedbackMessage = "Nenhuma nota foi avaliada. Tente novamente!";
+      return;
+    }
     if (correctNotes == _results.length) {
       _feedbackMessage = 'Parabéns! Você acertou todas as notas!';
     } else {
@@ -186,7 +248,7 @@ class SolfegeExerciseViewModel extends ChangeNotifier {
     }
   }
 
-  double _getDurationInBeats(String duration) {
+  double getDurationInBeats(String duration) {
     const durationMap = {
       'whole': 4.0,
       'half': 2.0,
@@ -198,7 +260,6 @@ class SolfegeExerciseViewModel extends ChangeNotifier {
     return durationMap[duration] ?? 1.0;
   }
 
-  // --- FUNÇÃO DE CONVERSÃO PARA MUSICXML ---
   String _convertExerciseToMusicXml(
     SolfegeExercise exercise,
     int highlightedNoteIndex,
@@ -211,13 +272,14 @@ class SolfegeExerciseViewModel extends ChangeNotifier {
       final index = entry.key;
       final noteData = entry.value;
 
-      String color = AppColors.text.toHex(); // Cor padrão (branca)
+      String color = AppColors.text.toHex();
 
       if (index < results.length) {
         final result = results[index];
-        color = result.wasPitchCorrect && result.wasOnTime
-            ? AppColors.completedHex
-            : AppColors.errorHex;
+        color =
+            result.wasPitchCorrect && result.wasOnTime && result.wasNameCorrect
+                ? AppColors.completedHex
+                : AppColors.errorHex;
       } else if (index == highlightedNoteIndex) {
         color = AppColors.accent.toHex();
       }
@@ -243,7 +305,7 @@ class SolfegeExerciseViewModel extends ChangeNotifier {
             $alter
             <octave>$octave</octave>
           </pitch>
-          <duration>1</duration> 
+          <duration>1</duration>
           <type>$type</type>
         </note>
       ''';
@@ -272,8 +334,9 @@ class SolfegeExerciseViewModel extends ChangeNotifier {
   }
 }
 
-// Extensão para converter Color para Hex
 extension on Color {
-  // ignore: deprecated_member_use
-  String toHex() => '#${value.toRadixString(16).substring(2, 8)}';
+  String toHex() {
+    // ignore: deprecated_member_use
+    return '#${red.toRadixString(16).padLeft(2, '0')}${green.toRadixString(16).padLeft(2, '0')}${blue.toRadixString(16).padLeft(2, '0')}';
+  }
 }
