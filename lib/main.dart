@@ -9,6 +9,7 @@ import 'package:musilingo/app/services/sfx_service.dart';
 import 'package:musilingo/app/services/user_session.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'screens/practice_solfege_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
